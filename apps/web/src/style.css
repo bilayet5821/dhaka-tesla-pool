@@ -1,0 +1,5 @@
+:root { font-family: system-ui, sans-serif; color: #153129; background: #f5f8f6; }
+body { margin: 0; }
+main { max-width: 48rem; margin: 18vh auto; padding: 2rem; }
+h1 { line-height: 1.1; }
+.eyebrow { color: #007452; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
