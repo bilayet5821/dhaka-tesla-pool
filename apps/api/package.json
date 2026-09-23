@@ -10,10 +10,15 @@
     "test": "vitest run",
     "migrate": "tsx src/db/migrate.ts",
     "migrate:compiled": "node dist/db/migrate.js",
+    "seed": "tsx src/db/seed.ts",
+    "seed:compiled": "node dist/db/seed.js",
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "argon2": "^0.45.1",
+    "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "zod": "^4.6.5"
   }
 }

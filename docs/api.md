@@ -2,10 +2,12 @@
 
 Base prefix `/api/v1`; JSON success `{ "data": ... }`, error `{ "error": { "code", "message", "details"? } }`. Use integer-poysha monetary fields, bounded pagination, session cookie authentication and server-side ownership checks. Keep request IDs in a response header.
 
+**Implemented in `feature/auth`:** register, login, logout, current session and health. All ride and driver endpoints below are planned, not implemented. Auth behavior and security settings are in [auth.md](auth.md).
+
 | Method and path | Principal | Purpose |
 | --- | --- | --- |
 | `GET /health/live`, `GET /health/ready` | public | Process liveness and DB/schema readiness |
-| `POST /auth/register`, `/auth/login`, `/auth/logout`; `GET /auth/me` | public or current user | Passenger signup, session, revocation, own profile |
+| `POST /auth/register`, `/auth/login`; `POST /auth/logout`; `GET /auth/me` | public; authenticated for logout/me | Passenger signup, login/seeded driver login, revocation, own safe profile |
 | `GET /areas`; `POST /fares/estimate` | public; passenger | Available zones; standalone fare estimate |
 | `POST /ride-requests`; `GET /ride-requests?scope=active|history`; `GET /ride-requests/:id`; `POST /ride-requests/:id/cancel` | passenger | Create, inspect, list and cancel **own** requests |
 | `GET /driver/vehicle`; `PATCH /driver/vehicle/availability` | assigned driver | View Bullet and switch online/offline if safe |
