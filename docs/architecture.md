@@ -18,15 +18,17 @@ Backend module boundaries: HTTP routes and validation -> auth/authorization -> r
 | `users` | id, name, normalized_email, password_hash, role, created_at | unique email; role PASSENGER/DRIVER |
 | `sessions` | id, user_id, token_hash, expires_at, revoked_at, created_at | unique token hash; FK user; expiry index |
 | `areas` | id, code, name | unique code |
-| `route_fares` | id, origin_area_id, destination_area_id, pricing_version, zone_charge_poysha | FK areas, directed route/version unique, nonnegative charge |
+| `route_fares` | id, origin_area_id, destination_area_id, pricing_version, base_per_seat_poysha, zone_charge_poysha | FK areas, directed route/version unique, nonnegative charges; versioned base tariff retained for reproducibility |
 | `vehicles` | id, driver_user_id, name, capacity_seats, is_online | FK driver, positive capacity, unique driver for MVP |
-| `ride_requests` | id, passenger_user_id, pickup_area_id, destination_area_id, seats_requested, status, estimated_fare_poysha, payment_method, created_at, cancelled_at | FK user/areas, 1..3 seats, distinct endpoints, unique active request per passenger, waiting/history indexes |
+| `ride_requests` | id, passenger_user_id, pickup_area_id, destination_area_id, seats_requested, status, estimated_fare_poysha, pricing_version, payment_method, created_at, updated_at, cancelled_at | FK user/areas, 1..3 seats, distinct endpoints, unique active request per passenger, waiting/history indexes |
 | `pools` | id, vehicle_id, pickup_area_id, status, created_at, accepted_at, arrived_at, started_at, completed_at, cancelled_at | FK vehicle/area; partial unique index on vehicle for nonterminal pools |
 | `pool_memberships` | id, pool_id, ride_request_id, joined_at, released_at | FK pool/request; unique request ID; pool index; cancellation retains membership record |
 | `fare_snapshots` | id, ride_request_id, pricing_version, seat_count, base_per_seat_poysha, zone_per_seat_poysha, discount_per_seat_poysha, total_poysha, committed_at | unique FK request; nonnegative money components |
-| `ride_events` | id, pool_id nullable, ride_request_id nullable, actor_user_id nullable, entity_type, from_state, to_state, reason, occurred_at | event belongs to request or pool; indexed by entity/time; system actor nullable |
+| `ride_events` | id, ride_request_id, actor_user_id nullable, from_state, to_state, reason, occurred_at | Phase 3 request events only; pool reference/entity type to be added with pool tables; indexed by request/time |
 
 All IDs are UUIDs and dates `timestamptz`. Cross-row vehicle capacity, matching eligibility, coordinated states and fare snapshots are transaction invariants, not claimed to be simple row checks.
+
+Phase 3 stores a versioned standalone estimate and a creation/cancellation event in the same transaction as its request change. No memberships or pool events exist until the pooling phase. Pre-match `REQUESTED` cancellation locks only the owned request row; once a request can join a pool, cancellation must use the vehicle → pool → request order described below.
 
 ```mermaid
 erDiagram
@@ -47,7 +49,7 @@ erDiagram
 
 `RideRequest`: `REQUESTED -> MATCHED` (system); `MATCHED -> ACCEPTED` (driver pool acceptance); `ACCEPTED -> DRIVER_ARRIVED` (driver arrival); `DRIVER_ARRIVED -> STARTED` (driver trip start); `STARTED -> COMPLETED` (driver trip finish). Owning passenger may move `REQUESTED`, `MATCHED`, `ACCEPTED`, or `DRIVER_ARRIVED` directly to `CANCELLED`. Terminal states have no outgoing transitions.
 
-`Pool`: creation -> `OPEN` (system); `OPEN -> ACCEPTED` (assigned driver); `ACCEPTED -> ARRIVED` (assigned driver); `ARRIVED -> IN_PROGRESS` (assigned driver); `IN_PROGRESS -> COMPLETED` (assigned driver). `OPEN`, `ACCEPTED`, or `ARRIVED` -> `CANCELLED` only as the system consequence of the final member cancelling. No join after `OPEN`; no cancellation after `IN_PROGRESS`. An individual rider cancellation while others remain does not change pool state.
+`Pool`: creation -> `OPEN` (system); `OPEN -> ACCEPTED` (assigned driver); `ACCEPTED -> ARRIVED` (assigned driver); `ARRIVED -> IN_PROGRESS` (assigned driver); `IN_PROGRESS -> COMPLETED` (assigned driver). `OPEN`, `ACCEPTED`, or `ARRIVED` -> `CANCELLED` only as the system consequence of the final member cancelling. New riders can join only while the pool is `OPEN`; no cancellation after `IN_PROGRESS`. An individual rider cancellation while others remain does not change pool state.
 
 Invalid and rejected: state skips; repeated actions; a passenger directly matching/accepting; a driver acting on another driver's pool; cancellation after start; acceptance of empty pool; accepting a stale/non-OPEN pool; arrival before acceptance; start before arrival; completion before start; transitions out of terminal states. Fail without partial writes or events.
 
