@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import argon2 from 'argon2';
 import request from 'supertest';
 
 const enabled = Boolean(process.env.TEST_DATABASE_URL &&
@@ -49,7 +50,7 @@ describe.skipIf(!enabled)('ride requests against PostgreSQL', () => {
     await database.query(
       `INSERT INTO users (id, name, normalized_email, password_hash, role)
        VALUES ($1, 'Jashim', $2, $3, 'DRIVER')`,
-      [driverId, driverEmail, 'integration-test-only'],
+      [driverId, driverEmail, await argon2.hash(randomBytes(24).toString('base64url'))],
     );
     await database.query(
       `INSERT INTO sessions (id, user_id, token_hash, expires_at)
