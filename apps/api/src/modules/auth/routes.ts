@@ -3,8 +3,11 @@ import type { RequestHandler } from 'express';
 import { z } from 'zod';
 import type { AuthRepository } from './repository.js';
 import { AuthService, AuthFailure } from './service.js';
-import { cookieOptions, SESSION_COOKIE } from './security.js';
+import { clearCookieOptions, cookieOptions, SESSION_COOKIE } from './security.js';
 import { AuthThrottle } from './throttle.js';
+import { requireSession } from './middleware.js';
+import type { SafeUser } from './repository.js';
+import { publicUser } from './service.js';
 
 const credentials = z.strictObject({
   email: z.email().max(254),
@@ -37,10 +40,22 @@ export function authRoutes(repository: AuthRepository, config: AuthConfig): Rout
     const ip = request.ip ?? 'unknown';
     if (!throttle.allowLogin(ip, email)) throw new AuthFailure(429, 'RATE_LIMITED', 'Please try again later');
     const result = await service.login(input);
+    const previousToken = request.cookies?.[SESSION_COOKIE] as string | undefined;
+    if (previousToken) await service.logout(previousToken);
     throttle.clearLogin(ip, email);
     response.cookie(SESSION_COOKIE, result.token, cookieOptions(config.secureCookies));
     response.json({ data: { user: result.user } });
   }) as RequestHandler);
+
+  router.post('/logout', requireSession(service), (async (request, response) => {
+    await service.logout(request.cookies[SESSION_COOKIE] as string);
+    response.clearCookie(SESSION_COOKIE, clearCookieOptions(config.secureCookies));
+    response.json({ data: { signedOut: true } });
+  }) as RequestHandler);
+
+  router.get('/me', requireSession(service), (_request, response) => {
+    response.json({ data: { user: publicUser(response.locals.authUser as SafeUser) } });
+  });
 
   return router;
 }
