@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import argon2 from 'argon2';
 import { pool } from './pool.js';
+import { passwordOptions } from '../modules/auth/security.js';
 
 export const demoAccounts = [
   { name: 'Jashim', email: 'jashim@demo.dhakatesla.local', role: 'DRIVER' },
@@ -18,9 +19,7 @@ export async function seedDemoAccounts(password: string): Promise<void> {
   try {
     await client.query('BEGIN');
     for (const account of demoAccounts) {
-      const passwordHash = await argon2.hash(password, {
-        type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1,
-      });
+      const passwordHash = await argon2.hash(password, passwordOptions);
       const result = await client.query<{ role: string }>(
         `INSERT INTO users (id, name, normalized_email, password_hash, role)
          VALUES ($1, $2, $3, $4, $5)

@@ -33,15 +33,19 @@ export class AuthService {
       id: randomUUID(), name: input.name.trim(), normalized_email: normalizedEmail,
       password_hash: passwordHash, role: 'PASSENGER',
     };
+    const token = newSessionToken();
     try {
-      await this.repository.createUser(user);
+      await this.repository.createUserWithSession(user, {
+        id: randomUUID(), userId: user.id, tokenHash: hashSessionToken(token),
+        expiresAt: new Date(this.now().getTime() + SESSION_LIFETIME_MS),
+      });
     } catch (error) {
       if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
         throw new AuthFailure(409, 'EMAIL_IN_USE', 'An account with this email already exists');
       }
       throw error;
     }
-    return this.issueSession(user);
+    return { user: publicUser(user), token };
   }
 
   async login(input: { email: string; password: string }): Promise<{ user: PublicUser; token: string }> {

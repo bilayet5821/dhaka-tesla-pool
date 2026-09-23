@@ -17,7 +17,7 @@ export type NewSession = { id: string; userId: string; tokenHash: string; expire
 
 export interface AuthRepository {
   findUserByEmail(normalizedEmail: string): Promise<UserRecord | null>;
-  createUser(user: NewUser): Promise<void>;
+  createUserWithSession(user: NewUser, session: NewSession): Promise<void>;
   createSession(session: NewSession): Promise<void>;
   findActiveUserBySession(tokenHash: string, now: Date): Promise<SafeUser | null>;
   revokeSession(tokenHash: string): Promise<void>;
@@ -34,10 +34,15 @@ export class PostgresAuthRepository implements AuthRepository {
     return result.rows[0] ?? null;
   }
 
-  async createUser(user: NewUser): Promise<void> {
+  async createUserWithSession(user: NewUser, session: NewSession): Promise<void> {
     await this.db.query(
-      'INSERT INTO users (id, name, normalized_email, password_hash, role) VALUES ($1, $2, $3, $4, $5)',
-      [user.id, user.name, user.normalized_email, user.password_hash, user.role],
+      `WITH created AS (
+         INSERT INTO users (id, name, normalized_email, password_hash, role)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id
+       ) INSERT INTO sessions (id, user_id, token_hash, expires_at)
+         SELECT $6, id, $7, $8 FROM created`,
+      [user.id, user.name, user.normalized_email, user.password_hash, user.role,
+        session.id, session.tokenHash, session.expiresAt],
     );
   }
 
