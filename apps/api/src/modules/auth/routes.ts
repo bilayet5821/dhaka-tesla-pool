@@ -9,11 +9,11 @@ import { requireSession } from './middleware.js';
 import type { SafeUser } from './repository.js';
 import { publicUser } from './service.js';
 
-const credentials = z.strictObject({
-  email: z.email().max(254),
-  password: z.string().min(12).max(128),
+const email = z.string().trim().email().max(254);
+const credentials = z.strictObject({ email, password: z.string().min(1).max(128) });
+const registration = z.strictObject({
+  name: z.string().trim().min(2).max(80), email, password: z.string().min(12).max(128),
 });
-const registration = credentials.extend({ name: z.string().trim().min(2).max(80) });
 
 export type AuthConfig = {
   secureCookies: boolean;
