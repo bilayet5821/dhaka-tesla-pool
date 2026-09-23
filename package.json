@@ -10,10 +10,12 @@
     "lint": "eslint apps --max-warnings 0 && npm run typecheck --workspaces",
     "test": "npm run test --workspaces",
     "migrate": "npm run migrate --workspace @tesla/api",
+    "seed": "npm run seed --workspace @tesla/api",
     "dev:api": "npm run dev --workspace @tesla/api",
     "dev:web": "npm run dev --workspace @tesla/web"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.2",
     "@types/pg": "^8.23.1",
