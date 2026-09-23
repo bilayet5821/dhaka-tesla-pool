@@ -18,7 +18,7 @@ export const dhakaAreas = [
   { code: 'farmgate', name: 'Farmgate' }, { code: 'bashundhara', name: 'Bashundhara' },
 ] as const;
 
-export async function seedRideDomain(): Promise<void> {
+export async function seedRideDomain(driverEmail: string = demoAccounts[0].email): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -51,7 +51,7 @@ export async function seedRideDomain(): Promise<void> {
       }
     }
     const driver = await client.query<{ id: string; role: string }>(
-      'SELECT id, role FROM users WHERE normalized_email = $1', [demoAccounts[0].email],
+      'SELECT id, role FROM users WHERE normalized_email = $1', [driverEmail],
     );
     if (driver.rows[0]?.role !== 'DRIVER') throw new Error('Seed Jashim before Bullet');
     await client.query(

@@ -41,6 +41,7 @@ export function rideRoutes(repository: PostgresRideRepository, auth: AuthService
     response.json({ data: ride });
   }) as RequestHandler);
   router.post('/:id/cancel', (async (request, response) => {
+    z.strictObject({}).parse(request.body);
     const { id } = idInput.parse(request.params);
     const user = response.locals.authUser as SafeUser;
     const ride = await service.cancel(id, user.id);
