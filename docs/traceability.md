@@ -1,6 +1,6 @@
 # PRD traceability and release gates
 
-IDs below follow the approved requirement analysis. Completion in this Phase 1 repository means **foundation only**; feature implementation and the full submission checklist are still pending.
+IDs below follow the approved requirement analysis. Phase 3 covers request persistence, standalone estimates, owned history and `REQUESTED` cancellation; matching, pooled fares, other transitions, driver operations and product screens remain future work.
 
 | ID | Component / deliverable | Required verification |
 | --- | --- | --- |
@@ -37,6 +37,16 @@ IDs below follow the approved requirement analysis. Completion in this Phase 1 r
 | VIDEO-01 | Video and prominent README link | Duration <=6 min and specified three blocks |
 | SUB-01 | Public/evaluator-accessible release | Fresh-clone reviewer checklist |
 | SCALE-01 | Optional scaling document | 1M passengers/100k drivers topics if attempted |
+
+## Phase 3 evidence and remaining scope
+
+| IDs | Implemented now | Remaining gate |
+| --- | --- | --- |
+| PROD-03, FARE-01, FARE-02 | Versioned Banani tariffs and integer-poysha request estimate; Nusrat 13000, Rafiq 17000 standalone tests | Pool-acceptance discount and accepted fare snapshots: Nusrat 11400, Rafiq 14600 |
+| PROD-04, POOL-02, POOL-03 | Owned request reads/list, `REQUESTED` cancellation and transactional request events | Later request/pool states, full cancellation policy and frontend |
+| GEO-01, GEO-02 | Eight named Dhaka areas; exactly two v1 bookable routes | Matching compatibility and multiple destinations in one pool |
+| DB-01, OPS-01 | `0002_ride_domain.sql`, idempotent Dhaka and Bullet seed, FK/check/index constraints | Pool membership/capacity transaction and full fresh Compose verification |
+| TEST-01, API-01 | Fare tests and real PostgreSQL API/integrity tests added | Run PostgreSQL integration gate and later capacity/concurrency tests |
 
 ## Six required behavior tests
 
