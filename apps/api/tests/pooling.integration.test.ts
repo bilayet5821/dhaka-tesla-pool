@@ -129,8 +129,11 @@ describe.skipIf(!enabled)('pooling with PostgreSQL', () => {
 
   it('keeps an incompatible pickup waiting while Bullet has a different OPEN pool', async () => {
     const dhanmondi = (await db.query<{ id: string }>('SELECT id FROM areas WHERE code = $1', ['dhanmondi'])).rows[0].id;
+    const otherPool = randomUUID();
     await db.query(`INSERT INTO pools (id, vehicle_id, pickup_area_id, status)
-      VALUES ($1, $2, $3, 'OPEN')`, [randomUUID(), vehicleId, dhanmondi]);
+      VALUES ($1, $2, $3, 'OPEN')`, [otherPool, vehicleId, dhanmondi]);
+    await db.query(`INSERT INTO ride_events (id, entity_type, pool_id, to_state, reason)
+      VALUES ($1, 'POOL', $2, 'OPEN', 'SYSTEM_POOL_CREATED')`, [randomUUID(), otherPool]);
     await online(true);
     const result = await create(nusrat);
     expect(result.status).toBe(201);
