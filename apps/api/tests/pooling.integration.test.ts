@@ -127,6 +127,18 @@ describe.skipIf(!enabled)('pooling with PostgreSQL', () => {
     // The approved rule retries waiting rides on availability changes (Phase 5), not on another creation.
   });
 
+  it('keeps an incompatible pickup waiting while Bullet has a different OPEN pool', async () => {
+    const dhanmondi = (await db.query<{ id: string }>('SELECT id FROM areas WHERE code = $1', ['dhanmondi'])).rows[0].id;
+    await db.query(`INSERT INTO pools (id, vehicle_id, pickup_area_id, status)
+      VALUES ($1, $2, $3, 'OPEN')`, [randomUUID(), vehicleId, dhanmondi]);
+    await online(true);
+    const result = await create(nusrat);
+    expect(result.status).toBe(201);
+    expect(result.body.data.status).toBe('REQUESTED');
+    expect((await pool())).toMatchObject({ status: 'OPEN', seats: '0' });
+    expect((await events(result.body.data.id)).map((x) => x.to_state)).toEqual(['REQUESTED']);
+  });
+
   it('releases a MATCHED seat and synchronously retries a waiting request', async () => {
     await online(true);
     const a = await create(nusrat);

@@ -1,6 +1,6 @@
 # PRD traceability and release gates
 
-IDs below follow the approved requirement analysis. Phase 3 covers request persistence, standalone estimates, owned history and `REQUESTED` cancellation; matching, pooled fares, other transitions, driver operations and product screens remain future work.
+IDs below follow the approved requirement analysis. Phase 4 adds pool persistence, synchronous matching, capacity locking and MATCHED cancellation. Pooled fares, later states, driver operations and product screens remain future work.
 
 | ID | Component / deliverable | Required verification |
 | --- | --- | --- |
@@ -75,3 +75,11 @@ IDs below follow the approved requirement analysis. Phase 3 covers request persi
 The six-minute video must cover 0:00-1:00 problem/users/core idea in own words, 1:00-3:00 architecture, backend, frontend, DB, lifecycle, decision and trade-off while displaying architecture and ERD, and 3:00-6:00 passenger/driver flows, pooling, own fare/status, edge case and deployment if available.
 
 Never pay for infrastructure, commit credentials, submit a giant finished-system initial commit, do all feature work on master, add technology solely for appearances, polish animation before integrity, hide AI usage, ship code you cannot explain, or replace the story cast with generic placeholders. Viral-scale reasoning may address load balancing, horizontal scaling, indexing/read replicas, caching, geospatial search, queues/events, realtime, rate limits, idempotency, observability, contention, matching, retries/failures, security and deployment **without adding those systems to the MVP**.
+
+## Phase 4 evidence and remaining gates
+
+| IDs | Implemented now | Remaining gate |
+| --- | --- | --- |
+| POOL-01, GEO-01, DB-01 | `0003_pooling.sql`, online OPEN-pool matching, unique active pool/membership, locked seat checks, three-rider and simultaneous last-seat PostgreSQL tests | Execute PostgreSQL integration tests on disposable database |
+| POOL-02, POOL-03, PROD-04 | Owned MATCHED cancellation releases membership and logs request/pool events; final OPEN member cancels pool | Driver acceptance and later pre-start cancellation in Phase 5 |
+| FARE-01 | Matched request retains standalone integer estimate | Accepted pooled fare snapshots and 11400/14600 fare tests in Phase 5 |
