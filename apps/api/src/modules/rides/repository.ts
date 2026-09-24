@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
+import { PostgresMatchingRepository } from '../matching/repository.js';
 
 export type RideRow = {
   id: string; passenger_user_id: string; pickup_area_id: string; destination_area_id: string;
@@ -39,6 +40,7 @@ export class PostgresRideRepository {
     estimatedFarePoysha: number; pricingVersion: number;
   }): Promise<RideRow> {
     const client = await this.db.connect();
+    let committed = false;
     try {
       await client.query('BEGIN');
       const result = await client.query<RideRow>(
@@ -55,12 +57,16 @@ export class PostgresRideRepository {
         [randomUUID(), ride.id, input.passengerId],
       );
       await client.query('COMMIT');
-      return ride;
+      committed = true;
+      client.release();
+      // Release the creation transaction before acquiring vehicle/pool/request locks.
+      await new PostgresMatchingRepository(this.db).allocate(ride.id);
+      return (await this.find(ride.id, input.passengerId))!;
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (!committed) await client.query('ROLLBACK');
       throw error;
     } finally {
-      client.release();
+      if (!committed) client.release();
     }
   }
 
@@ -88,39 +94,78 @@ export class PostgresRideRepository {
   }
 
   async cancel(id: string, passengerId: string): Promise<RideRow | null | 'INVALID_TRANSITION'> {
-    const client = await this.db.connect();
-    try {
-      await client.query('BEGIN');
-      const selected = await client.query<RideRow>(
-        'SELECT * FROM ride_requests WHERE id = $1 AND passenger_user_id = $2 FOR UPDATE',
-        [id, passengerId],
-      );
-      const ride = selected.rows[0];
-      if (!ride) {
+    const result = await this.cancelTransaction(id, passengerId);
+    if (result && result !== 'INVALID_TRANSITION') {
+      await new PostgresMatchingRepository(this.db).retryWaiting();
+    }
+    return result;
+  }
+
+  private async cancelTransaction(id: string, passengerId: string): Promise<RideRow | null | 'INVALID_TRANSITION'> {
+    // A REQUESTED lookup can race allocation. Restart with the new pool hint, never lock backwards.
+    for (;;) {
+      const client = await this.db.connect();
+      try {
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        const hint = (await client.query<{ pool_id: string; vehicle_id: string }>(
+          `SELECT m.pool_id, p.vehicle_id FROM pool_memberships m
+           JOIN pools p ON p.id = m.pool_id JOIN ride_requests r ON r.id = m.ride_request_id
+           WHERE r.id = $1 AND r.passenger_user_id = $2 AND m.released_at IS NULL`, [id, passengerId],
+        )).rows[0];
+        let poolStatus: string | undefined;
+        if (hint) {
+          await client.query('SELECT id FROM vehicles WHERE id = $1 FOR UPDATE', [hint.vehicle_id]);
+          poolStatus = (await client.query<{ status: string }>(
+            'SELECT status FROM pools WHERE id = $1 FOR UPDATE', [hint.pool_id],
+          )).rows[0]?.status;
+        }
+        const ride = (await client.query<RideRow>(
+          'SELECT * FROM ride_requests WHERE id = $1 AND passenger_user_id = $2 FOR UPDATE',
+          [id, passengerId],
+        )).rows[0];
+        if (!ride) { await client.query('ROLLBACK'); return null; }
+        const membership = (await client.query<{ pool_id: string }>(
+          'SELECT pool_id FROM pool_memberships WHERE ride_request_id = $1 AND released_at IS NULL', [id],
+        )).rows[0];
+        if (membership && membership.pool_id !== hint?.pool_id) {
+          await client.query('ROLLBACK'); continue;
+        }
+        if (!((ride.status === 'REQUESTED' && !membership) ||
+          (ride.status === 'MATCHED' && membership && poolStatus === 'OPEN'))) {
+          await client.query('ROLLBACK'); return 'INVALID_TRANSITION';
+        }
+        const updated = await client.query<RideRow>(
+          `UPDATE ride_requests SET status = 'CANCELLED', cancelled_at = clock_timestamp(),
+           updated_at = clock_timestamp() WHERE id = $1 RETURNING *`, [id],
+        );
+        await client.query(
+          `INSERT INTO ride_events (id, ride_request_id, actor_user_id, from_state, to_state, reason, occurred_at)
+           VALUES ($1, $2, $3, $4, 'CANCELLED', 'PASSENGER_CANCELLED', clock_timestamp())`,
+          [randomUUID(), id, passengerId, ride.status],
+        );
+        if (membership) {
+          await client.query('UPDATE pool_memberships SET released_at = clock_timestamp() WHERE ride_request_id = $1', [id]);
+          const active = await client.query(
+            'SELECT 1 FROM pool_memberships WHERE pool_id = $1 AND released_at IS NULL', [membership.pool_id],
+          );
+          if (!active.rowCount) {
+            await client.query(
+              `UPDATE pools SET status = 'CANCELLED', cancelled_at = clock_timestamp(),
+               updated_at = clock_timestamp() WHERE id = $1`, [membership.pool_id],
+            );
+            await client.query(
+              `INSERT INTO ride_events (id, entity_type, pool_id, from_state, to_state, reason, occurred_at)
+               VALUES ($1, 'POOL', $2, 'OPEN', 'CANCELLED', 'FINAL_MEMBER_CANCELLED', clock_timestamp())`,
+              [randomUUID(), membership.pool_id],
+            );
+          }
+        }
+        await client.query('COMMIT');
+        return updated.rows[0];
+      } catch (error) {
         await client.query('ROLLBACK');
-        return null;
-      }
-      // Phase 3 has no memberships. A later phase must use the vehicle -> pool -> request lock order.
-      if (ride.status !== 'REQUESTED') {
-        await client.query('ROLLBACK');
-        return 'INVALID_TRANSITION';
-      }
-      const updated = await client.query<RideRow>(
-        `UPDATE ride_requests SET status = 'CANCELLED', cancelled_at = now(), updated_at = now()
-         WHERE id = $1 RETURNING *`, [id],
-      );
-      await client.query(
-        `INSERT INTO ride_events (id, ride_request_id, actor_user_id, from_state, to_state, reason)
-         VALUES ($1, $2, $3, 'REQUESTED', 'CANCELLED', 'PASSENGER_CANCELLED')`,
-        [randomUUID(), id, passengerId],
-      );
-      await client.query('COMMIT');
-      return updated.rows[0];
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+        throw error;
+      } finally { client.release(); }
     }
   }
 }
