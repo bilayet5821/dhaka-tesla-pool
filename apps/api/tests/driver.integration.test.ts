@@ -108,15 +108,33 @@ describe.skipIf(!enabled)('driver lifecycle against PostgreSQL', () => {
     expect((await availability(false)).body.error.code).toBe('VEHICLE_BUSY');
     expect((await action(pool.id, 'accept', nusrat)).status).toBe(403);
     expect((await action(randomUUID(), 'accept')).status).toBe(404);
+    const beforeInvalid = (await db.query('SELECT count(*)::int AS n FROM ride_events WHERE pool_id = $1',
+      [pool.id])).rows[0].n;
     expect((await action(pool.id, 'arrive')).status).toBe(409);
+    expect((await db.query('SELECT count(*)::int AS n FROM ride_events WHERE pool_id = $1',
+      [pool.id])).rows[0].n).toBe(beforeInvalid);
     expect((await action(pool.id, 'accept')).status).toBe(200);
     expect((await action(pool.id, 'accept')).status).toBe(409);
+    expect((await db.query('SELECT count(*)::int AS n FROM ride_events WHERE pool_id = $1',
+      [pool.id])).rows[0].n).toBe(beforeInvalid + 1);
     const fares = await db.query<{ ride_request_id: string; total_poysha: number }>(
       'SELECT ride_request_id, total_poysha FROM fare_snapshots WHERE ride_request_id = ANY($1::uuid[])',
       [[a.body.data.id, b.body.data.id, c.body.data.id]],
     );
     expect(Object.fromEntries(fares.rows.map((f) => [f.ride_request_id, f.total_poysha])))
       .toMatchObject({ [a.body.data.id]: 11400, [b.body.data.id]: 14600, [c.body.data.id]: 11400 });
+    const own = await request(app).get(`/api/v1/ride-requests/${a.body.data.id}`)
+      .set('Cookie', nusrat);
+    expect(own.body.data.fareSnapshot).toMatchObject({
+      pricingVersion: 1, seatCount: 1, basePerSeatPoysha: 5000,
+      zonePerSeatPoysha: 8000, discountPerSeatPoysha: 1600, totalPoysha: 11400,
+    });
+    expect((await request(app).get(`/api/v1/ride-requests/${b.body.data.id}`)
+      .set('Cookie', rafiq)).body.data.fareSnapshot).toMatchObject({
+      zonePerSeatPoysha: 12000, discountPerSeatPoysha: 2400, totalPoysha: 14600,
+    });
+    expect((await request(app).get(`/api/v1/ride-requests/${b.body.data.id}`)
+      .set('Cookie', nusrat)).status).toBe(404);
     const waiting = await create(fourth);
     expect(waiting.body.data.status).toBe('REQUESTED');
     expect((await cancel(a.body.data.id, rafiq)).status).toBe(404);
@@ -130,7 +148,11 @@ describe.skipIf(!enabled)('driver lifecycle against PostgreSQL', () => {
     expect((await db.query('SELECT status FROM ride_requests WHERE id = $1',
       [waiting.body.data.id])).rows[0].status).toBe('REQUESTED');
     expect((await action(pool.id, 'arrive')).status).toBe(200);
+    expect((await db.query('SELECT status FROM ride_requests WHERE id = $1', [b.body.data.id]))
+      .rows[0].status).toBe('DRIVER_ARRIVED');
     expect((await action(pool.id, 'start')).status).toBe(200);
+    expect((await db.query('SELECT status FROM ride_requests WHERE id = $1', [b.body.data.id]))
+      .rows[0].status).toBe('STARTED');
     expect((await cancel(b.body.data.id, rafiq)).status).toBe(409);
     expect((await action(pool.id, 'complete')).status).toBe(200);
     expect((await db.query('SELECT status FROM ride_requests WHERE id = $1',
@@ -180,5 +202,98 @@ describe.skipIf(!enabled)('driver lifecycle against PostgreSQL', () => {
       .set('Cookie', sole)).body.data).toMatchObject({
       finalFarePoysha: 26000, cashDuePoysha: 0,
     });
+  });
+
+  it('serializes acceptance against matching and denies another driver access to the pool', async () => {
+    const first = await passenger('First');
+    const second = await passenger('Second');
+    const a = await create(first);
+    const b = await create(second, gulshan);
+    const poolId = (await request(app).get('/api/v1/driver/pools?scope=open')
+      .set('Cookie', driver)).body.data[0].id as string;
+    const otherDriver = randomUUID();
+    const { newSessionToken, hashSessionToken, SESSION_COOKIE } =
+      await import('../src/modules/auth/security.js');
+    const token = newSessionToken();
+    const otherCookie = `${SESSION_COOKIE}=${token}`;
+    await db.query(`INSERT INTO users (id, name, normalized_email, password_hash, role)
+      VALUES ($1, 'Other driver', $2, $3, 'DRIVER')`,
+    [otherDriver, `other-${randomUUID()}@example.com`,
+      await argon2.hash(randomBytes(24).toString('base64url'))]);
+    await db.query(`INSERT INTO sessions (id, user_id, token_hash, expires_at)
+      VALUES ($1, $2, $3, now() + interval '1 day')`,
+    [randomUUID(), otherDriver, hashSessionToken(token)]);
+    await db.query(`INSERT INTO vehicles (id, driver_user_id, name, capacity_seats)
+      VALUES ($1, $2, 'Other vehicle', 3)`, [randomUUID(), otherDriver]);
+    expect((await request(app).get(`/api/v1/driver/pools/${poolId}`)
+      .set('Cookie', otherCookie)).status).toBe(404);
+    expect((await action(poolId, 'accept', otherCookie)).status).toBe(404);
+    expect((await availability(true, otherCookie)).body.data.name).toBe('Other vehicle');
+    expect((await availability(false, otherCookie)).body.data.isOnline).toBe(false);
+    expect((await db.query('SELECT is_online FROM vehicles WHERE id = $1',
+      [vehicleId])).rows[0].is_online).toBe(true);
+
+    const waitingId = randomUUID();
+    await db.query(`INSERT INTO ride_requests (id, passenger_user_id, pickup_area_id,
+      destination_area_id, seats_requested, estimated_fare_poysha, pricing_version)
+      VALUES ($1, (SELECT passenger_user_id FROM ride_requests WHERE id = $2),
+        $3, $4, 1, 13000, 1)`, [waitingId, a.body.data.id, banani, mohakhali])
+      .then(() => { throw new Error('Active passenger constraint did not reject duplicate'); },
+        (error: unknown) => { expect(error).toMatchObject({ code: '23505' }); });
+    const third = await passenger('Third');
+    const { hashSessionToken: hash } = await import('../src/modules/auth/security.js');
+    const passengerId = (await db.query<{ user_id: string }>(
+      'SELECT user_id FROM sessions WHERE token_hash = $1',
+      [hash(third.split('=')[1])],
+    )).rows[0].user_id;
+    await db.query(`INSERT INTO ride_requests (id, passenger_user_id, pickup_area_id,
+      destination_area_id, seats_requested, estimated_fare_poysha, pricing_version)
+      VALUES ($1, $2, $3, $4, 1, 13000, 1)`,
+    [waitingId, passengerId, banani, mohakhali]);
+    await db.query(`INSERT INTO ride_events (id, ride_request_id, to_state, reason)
+      VALUES ($1, $2, 'REQUESTED', 'PASSENGER_REQUEST')`, [randomUUID(), waitingId]);
+    const blocker = await db.connect();
+    await blocker.query('BEGIN');
+    await blocker.query('SELECT id FROM vehicles WHERE id = $1 FOR UPDATE', [vehicleId]);
+    const matching = new (await import('../src/modules/matching/repository.js'))
+      .PostgresMatchingRepository(db);
+    const acceptance = action(poolId, 'accept').then((result) => result);
+    const allocation = matching.allocate(waitingId);
+    try {
+      let blocked = 0;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        blocked = (await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE pid <> pg_backend_pid() AND wait_event_type = 'Lock'
+            AND (query LIKE 'SELECT * FROM vehicles WHERE driver_user_id = $1 FOR UPDATE%'
+              OR query LIKE 'SELECT capacity_seats, is_online FROM vehicles WHERE id = $1 FOR UPDATE%')`))
+          .rows[0].n;
+        if (blocked >= 2) break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(blocked).toBeGreaterThanOrEqual(2);
+    } finally {
+      await blocker.query('COMMIT');
+      blocker.release();
+    }
+    const [accepted] = await Promise.all([acceptance, allocation]);
+    expect(accepted.status).toBe(200);
+    const candidate = (await db.query<{ status: string }>(
+      'SELECT status FROM ride_requests WHERE id = $1', [waitingId],
+    )).rows[0];
+    expect(['REQUESTED', 'ACCEPTED']).toContain(candidate.status);
+    const members = (await db.query<{ id: string; status: string; seats_requested: number }>(
+      `SELECT r.id, r.status, r.seats_requested FROM pool_memberships m
+       JOIN ride_requests r ON r.id = m.ride_request_id
+       WHERE m.pool_id = $1 AND m.released_at IS NULL`, [poolId],
+    )).rows;
+    expect(members.reduce((sum, row) => sum + row.seats_requested, 0)).toBeLessThanOrEqual(3);
+    expect(members.every((row) => row.status === 'ACCEPTED')).toBe(true);
+    expect(members.map((row) => row.id)).toEqual(expect.arrayContaining([a.body.data.id, b.body.data.id]));
+    expect((await db.query('SELECT count(*)::int AS n FROM fare_snapshots WHERE ride_request_id = ANY($1::uuid[])',
+      [members.map((row) => row.id)])).rows[0].n).toBe(members.length);
+    expect((await db.query('SELECT to_state FROM ride_events WHERE ride_request_id = $1 ORDER BY occurred_at, id',
+      [waitingId])).rows.map((event) => event.to_state))
+      .toEqual(candidate.status === 'REQUESTED' ? ['REQUESTED'] : ['REQUESTED', 'MATCHED', 'ACCEPTED']);
+    expect((await action(poolId, 'accept')).status).toBe(409);
   });
 });
