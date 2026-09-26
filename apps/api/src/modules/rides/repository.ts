@@ -8,6 +8,11 @@ export type RideRow = {
   pricing_version: number; payment_method: string; created_at: Date;
   updated_at: Date; cancelled_at: Date | null;
   final_fare_poysha?: number | null;
+  fare_snapshot?: {
+    pricingVersion: number; seatCount: number; basePerSeatPoysha: number;
+    zonePerSeatPoysha: number; discountPerSeatPoysha: number;
+    totalPoysha: number; committedAt: Date;
+  } | null;
 };
 export type EventRow = {
   id: string; ride_request_id: string; actor_user_id: string | null;
@@ -16,6 +21,13 @@ export type EventRow = {
 
 export class PostgresRideRepository {
   constructor(private readonly db: Pool) {}
+
+  private static readonly fareSelection = `r.*, f.total_poysha AS final_fare_poysha,
+    CASE WHEN f.id IS NULL THEN NULL ELSE json_build_object(
+      'pricingVersion', f.pricing_version, 'seatCount', f.seat_count,
+      'basePerSeatPoysha', f.base_per_seat_poysha, 'zonePerSeatPoysha', f.zone_per_seat_poysha,
+      'discountPerSeatPoysha', f.discount_per_seat_poysha, 'totalPoysha', f.total_poysha,
+      'committedAt', f.committed_at) END AS fare_snapshot`;
 
   async areas() {
     const result = await this.db.query<{ id: string; code: string; name: string }>(
@@ -73,7 +85,7 @@ export class PostgresRideRepository {
 
   async list(passengerId: string, scope: 'active' | 'history', limit: number, offset: number) {
     const result = await this.db.query<RideRow>(
-      `SELECT r.*, f.total_poysha AS final_fare_poysha
+      `SELECT ${PostgresRideRepository.fareSelection}
        FROM ride_requests r LEFT JOIN fare_snapshots f ON f.ride_request_id = r.id
        WHERE passenger_user_id = $1
          AND status ${scope === 'active' ? 'NOT IN' : 'IN'} ('COMPLETED', 'CANCELLED')
@@ -84,7 +96,7 @@ export class PostgresRideRepository {
 
   async find(id: string, passengerId: string): Promise<RideRow | null> {
     const result = await this.db.query<RideRow>(
-      `SELECT r.*, f.total_poysha AS final_fare_poysha
+      `SELECT ${PostgresRideRepository.fareSelection}
        FROM ride_requests r LEFT JOIN fare_snapshots f ON f.ride_request_id = r.id
        WHERE r.id = $1 AND r.passenger_user_id = $2`, [id, passengerId],
     );

@@ -14,6 +14,7 @@ export function publicRide(row: RideRow) {
     paymentMethod: row.payment_method, createdAt: row.created_at, updatedAt: row.updated_at,
     cancelledAt: row.cancelled_at, finalFarePoysha: row.final_fare_poysha ?? null,
     cashDuePoysha: row.status === 'CANCELLED' ? 0 : row.final_fare_poysha ?? null,
+    fareSnapshot: row.fare_snapshot ?? null,
   };
 }
 

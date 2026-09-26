@@ -41,14 +41,13 @@ export class PostgresDriverRepository {
       const vehicle = (await client.query<Vehicle>(
         'SELECT * FROM vehicles WHERE driver_user_id = $1 FOR UPDATE', [driverId],
       )).rows[0];
-      if (!vehicle) { await client.query('ROLLBACK'); throw new RideFailure(404, 'NOT_FOUND', 'Vehicle not found'); }
+      if (!vehicle) throw new RideFailure(404, 'NOT_FOUND', 'Vehicle not found');
       if (!online) {
         const busy = await client.query(
           "SELECT 1 FROM pools WHERE vehicle_id = $1 AND status NOT IN ('COMPLETED', 'CANCELLED') FOR UPDATE",
           [vehicle.id],
         );
         if (busy.rowCount) {
-          await client.query('ROLLBACK');
           throw new RideFailure(409, 'VEHICLE_BUSY', 'Finish or cancel the active pool first');
         }
       }
