@@ -36,7 +36,7 @@ describe.skipIf(!enabled)('pooling with PostgreSQL', () => {
     return request(app).post(`${api}/${id}/cancel`).set('Origin', origin).set('Cookie', cookie).send({});
   }
   async function online(value: boolean) {
-    // Test fixture: the driver availability endpoint belongs to Phase 5.
+    // Fixture controls vehicle state directly to isolate matching behavior.
     await db.query('UPDATE vehicles SET is_online = $1 WHERE id = $2', [value, vehicleId]);
   }
   async function pool() {
@@ -114,7 +114,7 @@ describe.skipIf(!enabled)('pooling with PostgreSQL', () => {
     expect(fourthRide.body.data.status).toBe('REQUESTED');
     expect(await pool()).toMatchObject({ seats: '3', members: '3' });
     expect((await events(fourthRide.body.data.id)).map((x) => x.to_state)).toEqual(['REQUESTED']);
-    expect((await db.query("SELECT to_regclass('fare_snapshots') AS name")).rows[0].name).toBeNull();
+    expect((await db.query('SELECT count(*)::int AS n FROM fare_snapshots')).rows[0].n).toBe(0);
   });
 
   it('leaves unsupported routes rejected, offline rides waiting, and preserves ownership', async () => {
@@ -192,7 +192,7 @@ describe.skipIf(!enabled)('pooling with PostgreSQL', () => {
     await online(true);
     const a = await create(nusrat);
     const id = a.body.data.id as string;
-    // Simulate a later phase transition; its driver endpoint is intentionally deferred.
+    // Simulate a started ride to confirm the cancellation cutoff.
     await db.query("UPDATE ride_requests SET status = 'STARTED' WHERE id = $1", [id]);
     const before = await events(id);
     const denied = await cancel(nusrat, id);
