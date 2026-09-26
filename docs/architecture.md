@@ -28,7 +28,7 @@ Backend module boundaries: HTTP routes and validation -> auth/authorization -> r
 
 All IDs are UUIDs and dates `timestamptz`. Cross-row vehicle capacity, matching eligibility, coordinated states and fare snapshots are transaction invariants, not claimed to be simple row checks.
 
-Phase 3 stores a versioned standalone estimate and a creation/cancellation event in the same transaction as its request change. Pool memberships and pool events are introduced in Phase 4. Pre-match `REQUESTED` cancellation locks only the owned request row; once a request can join a pool, cancellation must use the vehicle → pool → request order described below.
+Phase 3 stores a versioned standalone estimate and a creation/cancellation event in the same transaction as its request change. Pool memberships and pool events were introduced in Phase 4; immutable accepted fare snapshots in Phase 5. Pre-match `REQUESTED` cancellation locks only the owned request row; once a request can join a pool, cancellation uses the vehicle → pool → request order described below.
 
 ```mermaid
 erDiagram
@@ -62,6 +62,14 @@ Pool acceptance: lock vehicle -> pool -> **all currently active member RideReque
 Passenger cancellation: resolve pool ID without locking as a hint; then lock vehicle -> pool -> **the target request and any other request rows that must be changed, by ID**; reread request/pool/membership after locks. If the request was already cancelled, started or completed, reject without writes. Set target request `CANCELLED`, mark membership `released_at`, append request event, and, if no active members remain, move pre-start pool to `CANCELLED` and append pool event. All changes commit atomically. If the request was still `REQUESTED` without a pool, lock and update that request alone. Concurrent acceptance and cancellation serialize on vehicle/pool: whichever commits first determines the permitted next action; acceptance cannot price a cancelled passenger and cancellation cannot leave a priced active passenger without a consistent state. If the preliminary pool ID became stale, restart transaction lookup instead of locking in reverse order. Retry waiting requests after committing seat release, in a new transaction.
 
 In the controlled concurrency test, two separate connections simultaneously claim a pool with two reserved seats. Exactly one candidate becomes `MATCHED` and the other remains `REQUESTED`/waiting; reserved total is always <= 3, with matching events consistent with both states.
+
+## Phase 5 driver flow
+
+Only the assigned driver controls their vehicle or pool. Driver availability locks its own vehicle row; offline is refused while any nonterminal pool exists, including OPEN. Online commits first, then synchronously retries waiting requests. The assigned driver's pool detail and history expose member names, routes, seats, states, standalone estimates and accepted final fares, with no password or session fields. Passenger reads stay scoped to their own requests.
+
+Acceptance and arrival/start/completion each use READ COMMITTED on one checked-out client, locking vehicle → pool → active RideRequests by ID. Acceptance rechecks OPEN, MATCHED membership and capacity, then writes one immutable fare snapshot per request and moves pool and requests to ACCEPTED with events in one transaction. Two or more distinct active requests earn a 20% zone-charge discount per seat (half-up integer rounding). For one seat, Nusrat's Banani → Mohakhali fare is 5000 + 8000 - 1600 = 11400 poysha; Rafiq's Banani → Gulshan 1 fare is 5000 + 12000 - 2400 = 14600. One passenger occupying multiple seats alone pays the standalone tariff. The database rejects UPDATE/DELETE of snapshots; the accepted member set closes to new joins.
+
+Driver arrival moves ACCEPTED → ARRIVED and each ACCEPTED request → DRIVER_ARRIVED; start moves ARRIVED → IN_PROGRESS and each DRIVER_ARRIVED request → STARTED; completion moves IN_PROGRESS → COMPLETED and each STARTED request → COMPLETED. Every transition requires a nonempty active member set and appends pool/request events in the same transaction. After completion, an online vehicle retries waiting rides outside the completed transaction. A passenger may cancel ACCEPTED or DRIVER_ARRIVED before start, retaining their historical snapshot but owing zero cash; if the final member leaves, the pre-start pool becomes CANCELLED. Other members retain their accepted fares.
 
 ## Authorization and security
 

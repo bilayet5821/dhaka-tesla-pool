@@ -1,6 +1,6 @@
 # PRD traceability and release gates
 
-IDs below follow the approved requirement analysis. Phase 4 adds pool persistence, synchronous matching, capacity locking and MATCHED cancellation. Pooled fares, later states, driver operations and product screens remain future work.
+IDs below follow the approved requirement analysis. Phase 5 adds assigned-driver availability and pool lifecycle, immutable accepted fares, later state transitions and pre-start cancellation. Product screens remain future work.
 
 | ID | Component / deliverable | Required verification |
 | --- | --- | --- |
@@ -38,7 +38,7 @@ IDs below follow the approved requirement analysis. Phase 4 adds pool persistenc
 | SUB-01 | Public/evaluator-accessible release | Fresh-clone reviewer checklist |
 | SCALE-01 | Optional scaling document | 1M passengers/100k drivers topics if attempted |
 
-## Phase 3 evidence and remaining scope
+## Historical Phase 3 evidence and remaining scope at that phase
 
 | IDs | Implemented now | Remaining gate |
 | --- | --- | --- |
@@ -76,10 +76,19 @@ The six-minute video must cover 0:00-1:00 problem/users/core idea in own words, 
 
 Never pay for infrastructure, commit credentials, submit a giant finished-system initial commit, do all feature work on master, add technology solely for appearances, polish animation before integrity, hide AI usage, ship code you cannot explain, or replace the story cast with generic placeholders. Viral-scale reasoning may address load balancing, horizontal scaling, indexing/read replicas, caching, geospatial search, queues/events, realtime, rate limits, idempotency, observability, contention, matching, retries/failures, security and deployment **without adding those systems to the MVP**.
 
-## Phase 4 evidence and remaining gates
+## Historical Phase 4 evidence and remaining gates at that phase
 
 | IDs | Implemented now | Remaining gate |
 | --- | --- | --- |
 | POOL-01, GEO-01, DB-01 | `0003_pooling.sql`, online OPEN-pool matching, unique active pool/membership, locked seat checks, three-rider and simultaneous last-seat PostgreSQL tests | Execute PostgreSQL integration tests on disposable database |
 | POOL-02, POOL-03, PROD-04 | Owned MATCHED cancellation releases membership and logs request/pool events; final OPEN member cancels pool | Driver acceptance and later pre-start cancellation in Phase 5 |
 | FARE-01 | Matched request retains standalone integer estimate | Accepted pooled fare snapshots and 11400/14600 fare tests in Phase 5 |
+
+## Phase 5 evidence and remaining gates
+
+| IDs | Implemented on feature branch | Remaining gate |
+| --- | --- | --- |
+| PROD-05, POOL-01 | Assigned vehicle online/offline, online waiting retry, OPEN/ACCEPTED membership freeze; acceptance and matching serialize on vehicle/pool locks | Run driver and pooling suites against disposable PostgreSQL; Phase 6 UI |
+| PROD-06, POOL-03 | Assigned pool list/detail/history, atomic accept/arrive/start/complete with synchronized request events and online completion retry | Run PostgreSQL integration gate; Phase 6 driver UI |
+| FARE-01, FARE-02, FARE-03 | `0004_driver_flow.sql` immutable per-request integer snapshot; accepted Nusrat 11400 and Rafiq 14600; cancelled-before-start cash due zero | Run snapshot, cancellation and fare checks on PostgreSQL; payment collection remains simulated cash |
+| PROD-04, POOL-02 | Owned pre-start ACCEPTED/DRIVER_ARRIVED cancellation retains snapshots, releases membership, cancels final-member pool | Passenger UI and fresh DB integration check |
