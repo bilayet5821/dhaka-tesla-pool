@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import argon2 from 'argon2';
 import request from 'supertest';
+import { isolateDatabaseSuite } from './database-isolation.js';
 
 const enabled = Boolean(process.env.TEST_DATABASE_URL &&
   process.env.TEST_DATABASE_URL === process.env.DATABASE_URL);
@@ -35,7 +36,10 @@ describe.skipIf(!enabled)('ride requests against PostgreSQL', () => {
       .send({ pickupAreaId, destinationAreaId, seats });
   }
 
+  let releaseDatabase: (() => Promise<void>) | undefined;
+
   beforeAll(async () => {
+    releaseDatabase = await isolateDatabaseSuite();
     database = (await import('../src/db/pool.js')).pool;
     await (await import('../src/db/migrate.js')).migrate();
     app = (await import('../src/app.js')).createApp(database, { allowedOrigins: [origin] });
@@ -67,7 +71,9 @@ describe.skipIf(!enabled)('ride requests against PostgreSQL', () => {
     dhanmondi = areas.rows.find((area) => area.code === 'dhanmondi')!.id;
   });
 
-  afterAll(async () => { if (database) await database.end(); });
+  afterAll(async () => {
+    try { if (database) await database.end(); } finally { await releaseDatabase?.(); }
+  });
 
   it('lists supported areas and saves Nusrat and Rafiq standalone estimates and creation events', async () => {
     const bullet = await database.query<{ name: string; capacity_seats: number; is_online: boolean }>(

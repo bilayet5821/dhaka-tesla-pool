@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
+import { isolateDatabaseSuite } from './database-isolation.js';
 
 // Only run against an explicitly configured disposable PostgreSQL database.
 const integrationDb = process.env.TEST_DATABASE_URL;
@@ -9,7 +10,10 @@ const enabled = Boolean(integrationDb && integrationDb === process.env.DATABASE_
 describe.skipIf(!enabled)('auth against PostgreSQL', () => {
   let database: typeof import('../src/db/pool.js').pool;
 
+  let releaseDatabase: (() => Promise<void>) | undefined;
+
   beforeAll(async () => {
+    releaseDatabase = await isolateDatabaseSuite();
     const poolModule = await import('../src/db/pool.js');
     database = poolModule.pool;
     const { migrate } = await import('../src/db/migrate.js');
@@ -18,7 +22,7 @@ describe.skipIf(!enabled)('auth against PostgreSQL', () => {
   });
 
   afterAll(async () => {
-    if (database) await database.end();
+    try { if (database) await database.end(); } finally { await releaseDatabase?.(); }
   });
 
   it('seeds named driver and passengers idempotently with hashed passwords', async () => {
@@ -52,7 +56,9 @@ describe.skipIf(!enabled)('auth against PostgreSQL', () => {
     const created = await request(app).post('/api/v1/auth/register').set('Origin', 'http://localhost:3000')
       .send({ name: 'DB Auth Test', email, password });
     expect(created.status).toBe(201);
-    const cookie = (created.headers['set-cookie'] as string[])[0].split(';')[0];
+    const cookies = created.headers['set-cookie'];
+    if (!cookies) throw new Error('Registration did not set a session cookie');
+    const cookie = (Array.isArray(cookies) ? cookies[0] : cookies).split(';')[0];
     const rawToken = cookie.split('=')[1];
     const result = await database.query<{
       role: string; password_hash: string; token_hash: string; revoked_at: Date | null;
