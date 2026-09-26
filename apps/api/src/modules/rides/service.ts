@@ -12,7 +12,8 @@ export function publicRide(row: RideRow) {
     seats: row.seats_requested, status: row.status,
     estimatedFarePoysha: row.estimated_fare_poysha, pricingVersion: row.pricing_version,
     paymentMethod: row.payment_method, createdAt: row.created_at, updatedAt: row.updated_at,
-    cancelledAt: row.cancelled_at,
+    cancelledAt: row.cancelled_at, finalFarePoysha: row.final_fare_poysha ?? null,
+    cashDuePoysha: row.status === 'CANCELLED' ? 0 : row.final_fare_poysha ?? null,
   };
 }
 
@@ -32,7 +33,7 @@ export class RideService {
     }
     const tariff = await this.repository.tariff(input.pickupAreaId, input.destinationAreaId);
     if (!tariff) throw new RideFailure(400, 'UNSUPPORTED_ROUTE', 'Route is not available');
-    // Approved standalone v1 fare; a pool discount applies only when the driver accepts a future pool.
+    // Approved standalone v1 estimate; pooled prices are committed at driver acceptance.
     const estimatedFarePoysha = input.seats *
       (tariff.base_per_seat_poysha + tariff.zone_charge_poysha);
     if (!Number.isSafeInteger(estimatedFarePoysha) || estimatedFarePoysha > 2147483647) {
@@ -68,6 +69,7 @@ export class RideService {
     if (result === 'INVALID_TRANSITION') {
       throw new RideFailure(409, 'INVALID_TRANSITION', 'This request can no longer be cancelled');
     }
-    return publicRide(result);
+    const persisted = await this.repository.find(id, passengerId);
+    return publicRide(persisted ?? result);
   }
 }

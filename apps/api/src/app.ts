@@ -12,6 +12,8 @@ import { AuthService } from './modules/auth/service.js';
 import { PostgresRideRepository } from './modules/rides/repository.js';
 import { RideFailure } from './modules/rides/service.js';
 import { areaRoutes, rideRoutes } from './modules/rides/routes.js';
+import { PostgresDriverRepository } from './modules/driver/repository.js';
+import { driverRoutes } from './modules/driver/routes.js';
 
 type AppConfig = AuthConfig & { allowedOrigins: string[]; authRepository?: AuthRepository };
 
@@ -60,7 +62,7 @@ export function createApp(database: Pick<Pool, 'query'> & Partial<Pick<Pool, 'co
     }
   });
 
-  app.use(['/api/v1/auth', '/api/v1/ride-requests'], (request, response, next) => {
+  app.use(['/api/v1/auth', '/api/v1/ride-requests', '/api/v1/driver'], (request, response, next) => {
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) return next();
     if (!config.allowedOrigins.includes(request.get('origin') ?? '')) {
       response.locals.errorCode = 'ORIGIN_NOT_ALLOWED';
@@ -81,6 +83,9 @@ export function createApp(database: Pick<Pool, 'query'> & Partial<Pick<Pool, 'co
   app.use('/api/v1/areas', areaRoutes(rideRepository));
   app.use('/api/v1/ride-requests', express.json({ limit: '16kb' }), cookieParser(),
     rideRoutes(rideRepository, new AuthService(config.authRepository ?? new PostgresAuthRepository(database), config.now)));
+  app.use('/api/v1/driver', express.json({ limit: '16kb' }), cookieParser(),
+    driverRoutes(new PostgresDriverRepository(database as Pool),
+      new AuthService(config.authRepository ?? new PostgresAuthRepository(database), config.now)));
 
   app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
     void _next;

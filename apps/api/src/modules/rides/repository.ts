@@ -7,6 +7,7 @@ export type RideRow = {
   seats_requested: number; status: string; estimated_fare_poysha: number;
   pricing_version: number; payment_method: string; created_at: Date;
   updated_at: Date; cancelled_at: Date | null;
+  final_fare_poysha?: number | null;
 };
 export type EventRow = {
   id: string; ride_request_id: string; actor_user_id: string | null;
@@ -72,7 +73,9 @@ export class PostgresRideRepository {
 
   async list(passengerId: string, scope: 'active' | 'history', limit: number, offset: number) {
     const result = await this.db.query<RideRow>(
-      `SELECT * FROM ride_requests WHERE passenger_user_id = $1
+      `SELECT r.*, f.total_poysha AS final_fare_poysha
+       FROM ride_requests r LEFT JOIN fare_snapshots f ON f.ride_request_id = r.id
+       WHERE passenger_user_id = $1
          AND status ${scope === 'active' ? 'NOT IN' : 'IN'} ('COMPLETED', 'CANCELLED')
        ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3`, [passengerId, limit, offset],
     );
@@ -81,7 +84,9 @@ export class PostgresRideRepository {
 
   async find(id: string, passengerId: string): Promise<RideRow | null> {
     const result = await this.db.query<RideRow>(
-      'SELECT * FROM ride_requests WHERE id = $1 AND passenger_user_id = $2', [id, passengerId],
+      `SELECT r.*, f.total_poysha AS final_fare_poysha
+       FROM ride_requests r LEFT JOIN fare_snapshots f ON f.ride_request_id = r.id
+       WHERE r.id = $1 AND r.passenger_user_id = $2`, [id, passengerId],
     );
     return result.rows[0] ?? null;
   }
@@ -131,7 +136,9 @@ export class PostgresRideRepository {
           await client.query('ROLLBACK'); continue;
         }
         if (!((ride.status === 'REQUESTED' && !membership) ||
-          (ride.status === 'MATCHED' && membership && poolStatus === 'OPEN'))) {
+          (ride.status === 'MATCHED' && membership && poolStatus === 'OPEN') ||
+          (ride.status === 'ACCEPTED' && membership && poolStatus === 'ACCEPTED') ||
+          (ride.status === 'DRIVER_ARRIVED' && membership && poolStatus === 'ARRIVED'))) {
           await client.query('ROLLBACK'); return 'INVALID_TRANSITION';
         }
         const updated = await client.query<RideRow>(
@@ -155,8 +162,8 @@ export class PostgresRideRepository {
             );
             await client.query(
               `INSERT INTO ride_events (id, entity_type, pool_id, from_state, to_state, reason, occurred_at)
-               VALUES ($1, 'POOL', $2, 'OPEN', 'CANCELLED', 'FINAL_MEMBER_CANCELLED', clock_timestamp())`,
-              [randomUUID(), membership.pool_id],
+               VALUES ($1, 'POOL', $2, $3, 'CANCELLED', 'FINAL_MEMBER_CANCELLED', clock_timestamp())`,
+              [randomUUID(), membership.pool_id, poolStatus],
             );
           }
         }
