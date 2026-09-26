@@ -121,6 +121,8 @@ describe.skipIf(!enabled)('pooling with PostgreSQL', () => {
     expect(matched.body.data.status).toBe('MATCHED');
     const id = matched.body.data.id as string;
     expect((await request(app).get(`${api}/${id}`).set('Cookie', nusrat)).status).toBe(404);
+    expect((await request(app).get(`${api}?scope=active`).set('Cookie', nusrat)).body.data)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id })]));
     expect((await cancel(nusrat, id)).status).toBe(404);
     expect((await request(app).get(api)).status).toBe(401);
     expect((await db.query('SELECT status FROM ride_requests WHERE id = $1', [id])).rows[0].status).toBe('MATCHED');
@@ -152,7 +154,9 @@ describe.skipIf(!enabled)('pooling with PostgreSQL', () => {
     const result = await cancel(nusrat, a.body.data.id);
     expect(result.status).toBe(200);
     expect(result.body.data.status).toBe('CANCELLED');
-    expect((await cancel(nusrat, a.body.data.id)).body.error.code).toBe('INVALID_TRANSITION');
+    const repeated = await cancel(nusrat, a.body.data.id);
+    expect(repeated.status).toBe(409);
+    expect(repeated.body.error.code).toBe('INVALID_TRANSITION');
     expect((await pool())).toMatchObject({ status: 'OPEN', seats: '3', members: '3' });
     expect((await db.query('SELECT status FROM ride_requests WHERE id = $1', [waiting.body.data.id])).rows[0].status)
       .toBe('MATCHED');
@@ -161,6 +165,8 @@ describe.skipIf(!enabled)('pooling with PostgreSQL', () => {
     expect((await events(a.body.data.id)).map((x) => x.to_state)).toEqual(['REQUESTED', 'MATCHED', 'CANCELLED']);
     expect((await events(b.body.data.id)).map((x) => x.to_state)).toEqual(['REQUESTED', 'MATCHED']);
     expect((await events(c.body.data.id)).map((x) => x.to_state)).toEqual(['REQUESTED', 'MATCHED']);
+    expect((await db.query('SELECT count(*)::int AS n FROM pool_memberships WHERE ride_request_id = $1',
+      [a.body.data.id])).rows[0].n).toBe(1);
   });
 
   it('cancels the OPEN pool atomically when the last member leaves', async () => {
@@ -174,6 +180,22 @@ describe.skipIf(!enabled)('pooling with PostgreSQL', () => {
     const newRide = await create(rafiq, gulshan);
     expect(newRide.body.data.status).toBe('MATCHED');
     expect((await pool()).id).not.toBe(firstPool.id);
+  });
+
+  it('rejects a later-state cancellation without releasing membership or appending events', async () => {
+    await online(true);
+    const a = await create(nusrat);
+    const id = a.body.data.id as string;
+    // Simulate a later phase transition; its driver endpoint is intentionally deferred.
+    await db.query("UPDATE ride_requests SET status = 'STARTED' WHERE id = $1", [id]);
+    const before = await events(id);
+    const denied = await cancel(nusrat, id);
+    expect(denied.status).toBe(409);
+    expect(denied.body.error.code).toBe('INVALID_TRANSITION');
+    expect((await events(id))).toEqual(before);
+    expect((await pool())).toMatchObject({ status: 'OPEN', seats: '1', members: '1' });
+    expect((await db.query('SELECT released_at FROM pool_memberships WHERE ride_request_id = $1',
+      [id])).rows[0].released_at).toBeNull();
   });
 
   it('serializes two concurrent last-seat claims behind a locked vehicle', async () => {
