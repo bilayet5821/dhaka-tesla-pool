@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
+import { isolateDatabaseSuite } from './database-isolation.js';
 import argon2 from 'argon2';
 import { Pool } from 'pg';
 
@@ -55,7 +56,10 @@ describe.skipIf(!enabled)('pooling with PostgreSQL', () => {
     return result.rows;
   }
 
+  let releaseDatabase: (() => Promise<void>) | undefined;
+
   beforeAll(async () => {
+    releaseDatabase = await isolateDatabaseSuite();
     db = (await import('../src/db/pool.js')).pool;
     await (await import('../src/db/migrate.js')).migrate();
     app = (await import('../src/app.js')).createApp(db, { allowedOrigins: [origin] });
@@ -89,7 +93,9 @@ describe.skipIf(!enabled)('pooling with PostgreSQL', () => {
     await db.query('DELETE FROM pools WHERE vehicle_id = $1', [vehicleId]);
     await db.query('DELETE FROM ride_requests WHERE passenger_user_id IN (SELECT user_id FROM sessions WHERE token_hash = ANY($1::text[]))', [hashes]);
   });
-  afterAll(async () => { if (db) await db.end(); });
+  afterAll(async () => {
+    try { if (db) await db.end(); } finally { await releaseDatabase?.(); }
+  });
 
   it('matches compatible Nusrat and Rafiq, then fills the third seat without a discount snapshot', async () => {
     await online(true);
