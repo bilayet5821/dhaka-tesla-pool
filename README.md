@@ -2,7 +2,7 @@
 
 Share a seat. Split the fare. Survive Dhaka traffic.
 
-The `feature/tesla-pooling` branch implements **Phase 4: pool matching and capacity** on the merged foundation, auth and ride phases. Passengers create a request, see their own estimate/status/history and cancel in REQUESTED or MATCHED. An online Bullet can match compatible Banani rides in an OPEN pool, up to three seats; an unavailable seat leaves the request waiting. The React app remains a placeholder; accepted fares, driver controls and product UI belong to later phases.
+The `feature/driver-flow` branch adds **Phase 5 backend driver flow** to the merged auth, rides and pooling phases. Passengers see their own estimate, accepted fare and history; Jashim controls Bullet and its assigned pools. Compatible Banani rides share up to three seats; a full or busy vehicle leaves requests waiting. The React app remains a placeholder; product UI belongs to Phase 6.
 
 ## Design source and architecture
 
@@ -15,7 +15,7 @@ React + Vite avoids unnecessary server rendering for authenticated screens (alte
 ## Project structure
 
 - `apps/web`: React client and placeholder screen.
-- `apps/api`: Express API, auth and ride modules, SQL migrations, seed and tests.
+- `apps/api`: Express API, auth, ride, matching and driver modules, SQL migrations, seed and tests.
 - `infra`: container images and web proxy configuration.
 - `docs`: approved product decisions, architecture, ERD and planned API.
 
@@ -29,7 +29,7 @@ npm ci
 docker compose up --build
 ```
 
-The Compose API applies SQL migrations, idempotently seeds Jashim, Nusrat, Rafiq, Shirin, Bullet (three passenger seats), eight named areas and the two approved Banani tariffs, then starts the server. The migration runner records SHA-256 hashes of numbered SQL files. Migration `0001` creates `users` and `sessions`; `0002` adds `areas`, `route_fares`, `vehicles`, `ride_requests` and `ride_events`. Migration `0003` adds pools, memberships and pool events. `docker compose up` on later runs uses built images; `--build` rebuilds after code changes. On a host with PostgreSQL outside Compose, export `DATABASE_URL` and `AUTH_DEMO_PASSWORD`, then run `npm run migrate`, `npm run seed`, `npm run dev:api`, and `npm run dev:web` as needed. Vite proxies `/api` to localhost:3001 during local development.
+The Compose API applies SQL migrations, idempotently seeds Jashim, Nusrat, Rafiq, Shirin, Bullet (three passenger seats), eight named areas and the two approved Banani tariffs, then starts the server. The migration runner records SHA-256 hashes of numbered SQL files. Migrations `0001`–`0003` add auth, rides and pooling; `0004` adds immutable accepted fare snapshots. `docker compose up` on later runs uses built images; `--build` rebuilds after code changes. On a host with PostgreSQL outside Compose, export `DATABASE_URL` and `AUTH_DEMO_PASSWORD`, then run `npm run migrate`, `npm run seed`, `npm run dev:api`, and `npm run dev:web` as needed. Vite proxies `/api` to localhost:3001 during local development.
 
 ## Run checks
 
@@ -47,12 +47,14 @@ After Compose is healthy, web: `http://localhost:3000`, API liveness: `http://lo
 
 Auth endpoints are `POST /api/v1/auth/register`, `POST /login`, `POST /logout`, and `GET /me`. POST requests require `Content-Type: application/json` and an exact allowed `Origin`, including direct API calls. For example, to register, send JSON `{ "name": "Example", "email": "example@example.com", "password": "a-unique-strong-passphrase" }` with `Origin: http://localhost:3000`; the response sets an HttpOnly cookie. Refer to [auth design and security](docs/auth.md) for the contract. No public driver signup exists.
 
-`GET /api/v1/areas` lists named areas. Passenger-only `POST /api/v1/ride-requests` accepts `{ "pickupAreaId": "uuid", "destinationAreaId": "uuid", "seats": 1 }` and returns an integer-poysha estimate with `REQUESTED` or `MATCHED` status. `GET /api/v1/ride-requests?scope=active|history`, `GET /api/v1/ride-requests/:id` (with events), and `POST /api/v1/ride-requests/:id/cancel` serve only the owner. For one seat, the standalone v1 estimates are Nusrat Banani → Mohakhali **13000 poysha** and Rafiq Banani → Gulshan 1 **17000 poysha**. Both estimates remain standalone even when matched; the pool discount is committed **only upon future driver acceptance**. Bullet seeds offline. Phase 4 has no driver availability endpoint; set vehicle `is_online` in a disposable database for matching tests. See [API contract](docs/api.md) for exact request/response/error details.
+`GET /api/v1/areas` lists named areas. Passenger-only `POST /api/v1/ride-requests` accepts `{ "pickupAreaId": "uuid", "destinationAreaId": "uuid", "seats": 1 }` and returns an integer-poysha estimate with `REQUESTED` or `MATCHED` status. Owned list/detail and cancellation remain under `/api/v1/ride-requests`; detail includes events and the committed fare breakdown when accepted. Standalone one-seat estimates are Nusrat **13000** and Rafiq **17000** poysha. Driver acceptance freezes fares at **11400** and **14600** poysha respectively when pooled. Bullet seeds offline. Jashim can use `PATCH /api/v1/driver/vehicle/availability` with `{ "isOnline": true }`, list/detail assigned pools, then accept, arrive, start and complete the pool; see [API contract](docs/api.md). All mutations require a session, allowed Origin and JSON body.
+
+Availability changes, acceptance and trip actions use READ COMMITTED transactions, one connection each, and vehicle → pool → sorted request row locks. Going online and completing an online trip retry waiting rides after commit. An active OPEN pool also blocks going offline. Acceptance freezes members and saves each rider's integer-poysha fare; later pre-start cancellation releases seats without changing saved fares. A canceled rider owes zero cash. Driver actions reject repeats and wrong states with 409; passengers cannot cancel after start.
 
 ## Deployment, limitations and next work
 
-No public deployment URL or six-minute video exists in Phase 4. Only free hosting will be considered. Docker provides a reproducible route when a suitable free backend/database service is unavailable. Next: driver acceptance, accepted fare snapshots and trip lifecycle, product UIs, then integration/release checks. The auth throttle is process-local and would need shared coordination if the API gained replicas. The final README must include screenshots/GIFs, the video link, expanded API overview, verified limitations, AI Usage examples and optional viral-scale discussion before submission.
+No public deployment URL or six-minute video exists in Phase 5. Only free hosting will be considered. Docker provides a reproducible route when a suitable free backend/database service is unavailable. Next: passenger/driver product UI and later integration/release checks. The auth throttle is process-local and would need shared coordination if the API gained replicas. The final README must include screenshots/GIFs, the video link, expanded API overview, verified limitations, AI Usage examples and optional viral-scale discussion before submission.
 
 ## AI Usage (work in progress)
 
-ChatGPT/Codex was used to analyze the PRD, propose/document design decisions, scaffold the foundation, implement Phase 2 authentication and implement Phase 3 ride requests and Phase 4 locked pooling. One accepted suggestion: separate system matching from Jashim's pool acceptance, and keep request state separate from pool state. One changed suggestion: an earlier analysis conflated `MATCHED/ACCEPTED`; the design was corrected because matching and driver acceptance have different actors. All generated changes require testing and explanation before shipping.
+ChatGPT/Codex was used to analyze the PRD, propose/document design decisions, scaffold the foundation, implement authentication, ride requests, locked pooling and Phase 5 driver flow. One accepted suggestion: separate system matching from Jashim's pool acceptance, and keep request state separate from pool state. One changed suggestion: an earlier analysis conflated `MATCHED/ACCEPTED`; the design was corrected because matching and driver acceptance have different actors. All generated changes require testing and explanation before shipping.
