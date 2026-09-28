@@ -1,6 +1,6 @@
 # PRD traceability and release gates
 
-IDs below follow the approved requirement analysis. Phase 5 adds assigned-driver availability and pool lifecycle, immutable accepted fares, later state transitions and pre-start cancellation. Product screens remain future work.
+IDs below follow the approved requirement analysis. Phase 6 adds passenger and driver product screens over the existing backend. Deployment, final video and release work remain future work.
 
 | ID | Component / deliverable | Required verification |
 | --- | --- | --- |
@@ -92,3 +92,12 @@ Never pay for infrastructure, commit credentials, submit a giant finished-system
 | PROD-06, POOL-03 | Assigned pool list/detail/history, atomic accept/arrive/start/complete with synchronized request events and online completion retry | Run PostgreSQL integration gate; Phase 6 driver UI |
 | FARE-01, FARE-02, FARE-03 | `0004_driver_flow.sql` immutable per-request integer snapshot; accepted Nusrat 11400 and Rafiq 14600; cancelled-before-start cash due zero | Run snapshot, cancellation and fare checks on PostgreSQL; payment collection remains simulated cash |
 | PROD-04, POOL-02 | Owned pre-start ACCEPTED/DRIVER_ARRIVED cancellation retains snapshots, releases membership, cancels final-member pool | Passenger UI and fresh DB integration check |
+
+## Phase 6 frontend evidence and remaining gates
+
+| IDs | Implemented on feature branch | Remaining gate |
+| --- | --- | --- |
+| PROD-01, PROD-02, UI-01 | Same-origin React Router app, passenger registration and shared sign-in, session restoration and role guards | Full stack browser demo with PostgreSQL |
+| PROD-03, PROD-04, FARE-01, UI-02 | API areas, v1 booking preview, own request/status/fare/history, pre-start cancellation; shared loading/error/empty/success components | Verify cast-based user journeys on Docker |
+| PROD-05, PROD-06, POOL-02 | Bullet availability, assigned pool and Relevant Ride Requests, lifecycle controls, member fares and trip history | Full stack driver journey and concurrency gate |
+| TEST-01, STACK-01 | Frontend API-flow tests, TypeScript and responsive layout | Docker Compose build and end-to-end browser checks |
