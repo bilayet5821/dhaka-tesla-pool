@@ -2,7 +2,7 @@
 
 Share a seat. Split the fare. Survive Dhaka traffic.
 
-The `feature/driver-flow` branch adds **Phase 5 backend driver flow** to the merged auth, rides and pooling phases. Passengers see their own estimate, accepted fare and history; Jashim controls Bullet and its assigned pools. Compatible Banani rides share up to three seats; a full or busy vehicle leaves requests waiting. The React app remains a placeholder; product UI belongs to Phase 6.
+The `feature/frontend-ui` branch adds the **Phase 6 passenger and driver frontend MVP** to the merged auth, ride, pooling and driver APIs. Passengers can book and track their own rides; Jashim controls Bullet and assigned pools. Compatible Banani rides share up to three seats; a full or busy vehicle leaves requests waiting.
 
 ## Design source and architecture
 
@@ -14,7 +14,7 @@ React + Vite avoids unnecessary server rendering for authenticated screens (alte
 
 ## Project structure
 
-- `apps/web`: React client and placeholder screen.
+- `apps/web`: React Router frontend with session context, API client, passenger and driver pages, shared feedback components and UI tests.
 - `apps/api`: Express API, auth, ride, matching and driver modules, SQL migrations, seed and tests.
 - `infra`: container images and web proxy configuration.
 - `docs`: approved product decisions, architecture, ERD and planned API.
@@ -49,12 +49,16 @@ Auth endpoints are `POST /api/v1/auth/register`, `POST /login`, `POST /logout`, 
 
 `GET /api/v1/areas` lists named areas. Passenger-only `POST /api/v1/ride-requests` accepts `{ "pickupAreaId": "uuid", "destinationAreaId": "uuid", "seats": 1 }` and returns an integer-poysha estimate with `REQUESTED` or `MATCHED` status. Owned list/detail and cancellation remain under `/api/v1/ride-requests`; detail includes events and the committed fare breakdown when accepted. Standalone one-seat estimates are Nusrat **13000** and Rafiq **17000** poysha. Driver acceptance freezes fares at **11400** and **14600** poysha respectively when pooled. Bullet seeds offline. Jashim can use `PATCH /api/v1/driver/vehicle/availability` with `{ "isOnline": true }`, list/detail assigned pools, then accept, arrive, start and complete the pool; see [API contract](docs/api.md). All mutations require a session, allowed Origin and JSON body.
 
+**Frontend routes:** `/signin` handles passenger and driver login; `/signup` creates passenger accounts only. `/passenger` shows supported API areas, a standalone v1 estimate, booking, current status, accepted fare breakdown and permitted cancellation; `/passenger/history` shows only owned past rides and their events. `/driver` shows Bullet availability, the assigned pool, **Relevant Ride Requests** and the next valid trip action; `/driver/history` shows assigned completed/cancelled pools. Protected routes restore the cookie session with `GET /auth/me` and redirect across roles. The client stores no session token. Mutations go through the existing API; the client does not set ride or pool states itself. Status pages refresh on demand and poll while visible.
+
+The booking form labels its pre-booking amount as an indicative standalone v1 tariff for Banani → Mohakhali/Gulshan 1. The server's returned estimate replaces that preview after submission. The separate `/fares/estimate` endpoint is not implemented; the frontend does not call it. Other areas returned by `GET /areas` are shown as future, unavailable routes.
+
 Availability changes, acceptance and trip actions use READ COMMITTED transactions, one connection each, and vehicle → pool → sorted request row locks. Going online and completing an online trip retry waiting rides after commit. An active OPEN pool also blocks going offline. Acceptance freezes members and saves each rider's integer-poysha fare; later pre-start cancellation releases seats without changing saved fares. A canceled rider owes zero cash. Driver actions reject repeats and wrong states with 409; passengers cannot cancel after start.
 
 ## Deployment, limitations and next work
 
-No public deployment URL or six-minute video exists in Phase 5. Only free hosting will be considered. Docker provides a reproducible route when a suitable free backend/database service is unavailable. Next: passenger/driver product UI and later integration/release checks. The auth throttle is process-local and would need shared coordination if the API gained replicas. The final README must include screenshots/GIFs, the video link, expanded API overview, verified limitations, AI Usage examples and optional viral-scale discussion before submission.
+No public deployment URL or six-minute video exists in Phase 6. Only free hosting will be considered. Docker provides a reproducible route when a suitable free backend/database service is unavailable. Next: full stack PostgreSQL/browser integration on Docker, final documentation and media, then the approved pre-release/release workflow. The auth throttle is process-local and would need shared coordination if the API gained replicas. The final README must include screenshots/GIFs, the video link, expanded API overview, verified limitations, AI Usage examples and optional viral-scale discussion before submission.
 
 ## AI Usage (work in progress)
 
-ChatGPT/Codex was used to analyze the PRD, propose/document design decisions, scaffold the foundation, implement authentication, ride requests, locked pooling and Phase 5 driver flow. One accepted suggestion: separate system matching from Jashim's pool acceptance, and keep request state separate from pool state. One changed suggestion: an earlier analysis conflated `MATCHED/ACCEPTED`; the design was corrected because matching and driver acceptance have different actors. All generated changes require testing and explanation before shipping.
+ChatGPT/Codex was used to analyze the PRD, propose/document design decisions, scaffold the foundation, implement authentication, ride requests, locked pooling, Phase 5 driver flow and Phase 6 frontend. One accepted suggestion: separate system matching from Jashim's pool acceptance, and keep request state separate from pool state. One changed suggestion: an earlier analysis conflated `MATCHED/ACCEPTED`; the design was corrected because matching and driver acceptance have different actors. All generated changes require testing and explanation before shipping.

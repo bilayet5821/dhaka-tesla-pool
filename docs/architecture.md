@@ -11,6 +11,8 @@ flowchart LR
 
 Backend module boundaries: HTTP routes and validation -> auth/authorization -> requests, matching/capacity, fares, driver/trips -> repositories and PostgreSQL transactions. One transaction commits each multi-record business action; request and pool events are inserted alongside states. Frontend has passenger and driver routes, one session context and API client, and shared loading/error/empty feedback components. Driver OPEN-pool view must visibly label its member list **Relevant Ride Requests** and show names, pickup, destinations and seat counts.
 
+Phase 6 implements those frontend boundaries with React Router. A same-origin `/api/v1` client uses the HttpOnly session cookie (never reads or stores its value); `/auth/me` restores the user on load. Passenger and driver route guards redirect the other role. Passenger screens call only owned request APIs; driver screens call only assigned vehicle/pool APIs. The UI renders server states and fare snapshots, offers only valid next actions, and polls active status while visible. The booking form's v1 standalone preview is explicitly indicative; the API response is authoritative after booking. No frontend code allocates members or advances a state locally.
+
 ## Planned relational schema
 
 | Table | Principal columns | Constraints and indexes |
