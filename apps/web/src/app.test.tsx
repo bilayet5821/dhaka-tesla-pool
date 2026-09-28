@@ -55,6 +55,21 @@ function pool(status: AssignedPool['status'] = 'OPEN'): AssignedPool {
 }
 
 describe('frontend API flows', () => {
+  it('shows session loading until the server restores the passenger', async () => {
+    let finish!: (response: Response) => void;
+    install((path) => {
+      if (path === '/auth/me') return new Promise<Response>((resolve) => { finish = resolve; });
+      if (path === '/areas') return reply([banani, mohakhali]);
+      if (path.startsWith('/ride-requests?')) return reply([]);
+      throw new Error(`Unexpected ${path}`);
+    });
+    window.history.replaceState({}, '', '/passenger');
+    render(<App />);
+    expect(screen.getByRole('status')).toHaveTextContent('Restoring your session');
+    finish(reply({ user: passenger }));
+    expect(await screen.findByText('No active ride')).toBeInTheDocument();
+  });
+
   it('signs in Jashim and redirects to driver-only navigation', async () => {
     const requests = install((path, method, body) => {
       if (path === '/auth/me') return reply({ code: 'AUTH_REQUIRED', message: 'Sign in required' }, 401);
@@ -166,6 +181,7 @@ describe('frontend API flows', () => {
   it('protects roles, controls Bullet availability and presents only the valid next action', async () => {
     let online = false;
     let current = pool();
+    let rejectAccept = true;
     const requests = install((path, method, body) => {
       if (path === '/auth/me') return reply({ user: driver });
       if (path === '/areas') return reply([banani, mohakhali, gulshan]);
@@ -179,6 +195,10 @@ describe('frontend API flows', () => {
       if (path.startsWith('/driver/pools?scope=active')) return reply([current]);
       const action = path.match(/^\/driver\/pools\/pool-1\/(accept|arrive|start|complete)$/)?.[1];
       if (action) {
+        if (action === 'accept' && rejectAccept) {
+          rejectAccept = false;
+          return reply({ code: 'INVALID_TRANSITION', message: 'Pool membership has changed' }, 409);
+        }
         current = pool({ accept: 'ACCEPTED', arrive: 'ARRIVED', start: 'IN_PROGRESS',
           complete: 'COMPLETED' }[action] as AssignedPool['status']);
         return reply(current);
@@ -198,13 +218,16 @@ describe('frontend API flows', () => {
     expect(await screen.findByText('Bullet is online. Waiting rides were checked.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Go offline' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Accept pool' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Pool membership has changed');
+    expect(screen.getByRole('button', { name: 'Accept pool' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Accept pool' }));
     expect(await screen.findByRole('button', { name: 'Mark arrived' })).toBeEnabled();
     await user.click(screen.getByRole('button', { name: 'Mark arrived' }));
     expect(await screen.findByRole('button', { name: 'Start trip' })).toBeEnabled();
     await user.click(screen.getByRole('button', { name: 'Start trip' }));
     expect(await screen.findByRole('button', { name: 'Complete trip' })).toBeEnabled();
     expect(requests.mock.calls.filter(([path]) => String(path).includes('/driver/pools/pool-1/')))
-      .toHaveLength(3);
+      .toHaveLength(4);
   });
 
   it('shows immutable fare components and hides cancellation after trip start', async () => {
