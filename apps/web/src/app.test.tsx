@@ -211,7 +211,7 @@ describe('frontend API flows', () => {
     expect(await screen.findByText('Ready to roll, Jashim?')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/driver');
     expect(screen.queryByRole('link', { name: 'My ride' })).not.toBeInTheDocument();
-    expect(screen.getByText('Relevant Ride Requests')).toBeInTheDocument();
+    expect(await screen.findByText('Relevant Ride Requests')).toBeInTheDocument();
     expect(screen.getByText('Nusrat')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Go online' })).toBeEnabled();
     await user.click(screen.getByRole('button', { name: 'Go online' }));
