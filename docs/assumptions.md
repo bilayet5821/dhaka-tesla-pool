@@ -33,6 +33,6 @@ Passengers self-register; Jashim's driver account is seeded. Use a maintained Ar
 
 Append state events with actor (or system), affected request/pool, old/new states, reason and timestamp in the same transaction as state changes. Preserve membership and immutable accepted fare snapshots. Do not expose secrets or raw credentials in seed instructions. Use free hosting only; when no suitable free backend/database host exists, record the reason and offer reproducible Docker deployment.
 
-## Current intentionally deferred work
+## Release boundary
 
-Phase 1 has no auth implementation, ride schema, matching, fare logic, passenger/driver product screens, or live deployment. Git flow: real `feature/*` work into `master`, then `pre-release`, finally `release/v1.0.0` cut from `pre-release` only after release checks. Every commit uses `<type>(<scope>): <short description>`.
+The Phase 1–6 MVP implements auth, rides, matching, fares and passenger/driver screens. Public deployment, release branch and final video remain pending. Git flow: real `feature/*` work into `master`, then `pre-release`, finally `release/v1.0.0` cut from `pre-release` only after release checks. Every commit uses `<type>(<scope>): <short description>`.

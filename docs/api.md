@@ -1,14 +1,14 @@
-# REST API contract (partially implemented)
+# REST API contract (implemented MVP)
 
 Base prefix `/api/v1`; JSON success `{ "data": ... }`, error `{ "error": { "code", "message", "details"? } }`. Use integer-poysha monetary fields, bounded pagination, session cookie authentication and server-side ownership checks. Keep request IDs in a response header.
 
-**Implemented through `feature/driver-flow`:** health, auth, `GET /areas`, owned request operations, system allocation, driver vehicle controls and assigned pool lifecycle/history. The separate `/fares/estimate` remains planned. Auth behavior and security settings are in [auth.md](auth.md).
+The merged MVP implements health, auth, `GET /areas`, owned request operations, system allocation, driver vehicle controls and assigned pool lifecycle/history. There is no separate `/fares/estimate` endpoint; the booking response contains the authoritative estimate. Auth behavior and security settings are in [auth.md](auth.md).
 
 | Method and path | Principal | Purpose |
 | --- | --- | --- |
 | `GET /health/live`, `GET /health/ready` | public | Process liveness and DB/schema readiness |
 | `POST /auth/register`, `/auth/login`; `POST /auth/logout`; `GET /auth/me` | public; authenticated for logout/me | Passenger signup, login/seeded driver login, revocation, own safe profile |
-| `GET /areas`; `POST /fares/estimate` | public; passenger | Available zones (implemented); separate fare quote (planned) |
+| `GET /areas` | public | Available named zones; only two seeded Banani routes are bookable |
 | `POST /ride-requests`; `GET /ride-requests?scope=active|history`; `GET /ride-requests/:id`; `POST /ride-requests/:id/cancel` | passenger | Create, inspect, list and cancel **own** requests |
 | `GET /driver/vehicle`; `PATCH /driver/vehicle/availability` | assigned driver | View Bullet and switch online/offline if safe |
 | `GET /driver/pools?scope=open|active|history`; `GET /driver/pools/:id` | assigned driver | Show pool and **Relevant Ride Requests** for OPEN pools |
@@ -20,7 +20,7 @@ Validation: Zod at HTTP boundaries; request seats 1..3, distinct supported picku
 
 `GET /areas` returns `{ data: [{ id, code, name }] }` for all named Dhaka areas. Only Banani → Mohakhali and Banani → Gulshan 1 are bookable in v1; other named areas are listed for future tariffs.
 
-`POST /ride-requests` takes `{ "pickupAreaId": "uuid", "destinationAreaId": "uuid", "seats": 1 }` and returns 201 `{ data: { id, pickupAreaId, destinationAreaId, seats, status: "REQUESTED", estimatedFarePoysha, pricingVersion, paymentMethod: "CASH", createdAt, updatedAt, cancelledAt: null } }`. This is the approved standalone estimate (Nusrat 13000, Rafiq 17000 poysha for one seat). In Phase 4, the response may instead have status `MATCHED` if an online vehicle has an eligible OPEN pool or can start one. The estimate remains standalone; no pool discount is committed before acceptance. Wrong/unknown area IDs or an unsupported direction yield 400 `UNSUPPORTED_ROUTE`; equal endpoints, malformed UUID, extra fields or seats outside 1..3 yield 400 `INVALID_INPUT`. A second active request yields 409 `ACTIVE_REQUEST_EXISTS`.
+`POST /ride-requests` takes `{ "pickupAreaId": "uuid", "destinationAreaId": "uuid", "seats": 1 }` and returns 201 `{ data: { id, pickupAreaId, destinationAreaId, seats, status: "REQUESTED", estimatedFarePoysha, pricingVersion, paymentMethod: "CASH", createdAt, updatedAt, cancelledAt: null } }`. This is the approved standalone estimate (Nusrat 13000, Rafiq 17000 poysha for one seat). After system allocation, the response may instead have status `MATCHED` if an online vehicle has an eligible OPEN pool or can start one. The estimate remains standalone; no pool discount is committed before acceptance. Wrong/unknown area IDs or an unsupported direction yield 400 `UNSUPPORTED_ROUTE`; equal endpoints, malformed UUID, extra fields or seats outside 1..3 yield 400 `INVALID_INPUT`. A second active request yields 409 `ACTIVE_REQUEST_EXISTS`.
 
 `GET /ride-requests?scope=active|history&limit=20&offset=0` defaults to active, bounds `limit` to 1..50 and `offset` to 0..10000, returns `{ data: [request] }` newest first. History includes completed/cancelled requests. `GET /ride-requests/:id` returns an owned request plus `events: [{ id, fromState, toState, reason, actorUserId, occurredAt }]`; unowned/unknown IDs return 404. Request responses include `finalFarePoysha`, `cashDuePoysha`, and `fareSnapshot` (null before acceptance). Snapshots contain `pricingVersion`, `seatCount`, `basePerSeatPoysha`, `zonePerSeatPoysha`, `discountPerSeatPoysha`, `totalPoysha`, `committedAt`. A cancelled request owes zero cash and retains its accepted snapshot. `POST /ride-requests/:id/cancel` takes `{}` with JSON content type and allowed Origin; the owner may cancel `REQUESTED`, `MATCHED`, `ACCEPTED`, or `DRIVER_ARRIVED` before start. Matched and accepted cancellation releases its seat; an empty pre-start pool becomes CANCELLED. Repeated or post-start cancellation returns 409 `INVALID_TRANSITION`. All four ride operations require a passenger session; driver sessions get 403.
 

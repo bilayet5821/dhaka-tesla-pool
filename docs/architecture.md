@@ -11,22 +11,22 @@ flowchart LR
 
 Backend module boundaries: HTTP routes and validation -> auth/authorization -> requests, matching/capacity, fares, driver/trips -> repositories and PostgreSQL transactions. One transaction commits each multi-record business action; request and pool events are inserted alongside states. Frontend has passenger and driver routes, one session context and API client, and shared loading/error/empty feedback components. Driver OPEN-pool view must visibly label its member list **Relevant Ride Requests** and show names, pickup, destinations and seat counts.
 
-Phase 6 implements those frontend boundaries with React Router. A same-origin `/api/v1` client uses the HttpOnly session cookie (never reads or stores its value); `/auth/me` restores the user on load. Passenger and driver route guards redirect the other role. Passenger screens call only owned request APIs; driver screens call only assigned vehicle/pool APIs. The UI renders server states and fare snapshots, offers only valid next actions, and polls active status while visible. The booking form's v1 standalone preview is explicitly indicative; the API response is authoritative after booking. No frontend code allocates members or advances a state locally.
+The merged MVP implements those frontend boundaries with React Router. A same-origin `/api/v1` client uses the HttpOnly session cookie (never reads or stores its value); `/auth/me` restores the user on load. Passenger and driver route guards redirect the other role. Passenger screens call only owned request APIs; driver screens call only assigned vehicle/pool APIs. The UI renders server states and fare snapshots, offers only valid next actions, and polls active status while visible. The booking form's v1 standalone preview is explicitly indicative; the API response is authoritative after booking. No frontend code allocates members or advances a state locally.
 
-## Planned relational schema
+## Implemented relational schema (migrations 0001–0004)
 
 | Table | Principal columns | Constraints and indexes |
 | --- | --- | --- |
 | `users` | id, name, normalized_email, password_hash, role, created_at | unique email; role PASSENGER/DRIVER |
 | `sessions` | id, user_id, token_hash, expires_at, revoked_at, created_at | unique token hash; FK user; expiry index |
-| `areas` | id, code, name | unique code |
+| `areas` | id, code, name, created_at | unique code and name |
 | `route_fares` | id, origin_area_id, destination_area_id, pricing_version, base_per_seat_poysha, zone_charge_poysha | FK areas, directed route/version unique, nonnegative charges; versioned base tariff retained for reproducibility |
-| `vehicles` | id, driver_user_id, name, capacity_seats, is_online | FK driver, positive capacity, unique driver for MVP |
+| `vehicles` | id, driver_user_id, name, capacity_seats, is_online, created_at, updated_at | FK driver, positive capacity, unique driver for MVP |
 | `ride_requests` | id, passenger_user_id, pickup_area_id, destination_area_id, seats_requested, status, estimated_fare_poysha, pricing_version, payment_method, created_at, updated_at, cancelled_at | FK user/areas, 1..3 seats, distinct endpoints, unique active request per passenger, waiting/history indexes |
-| `pools` | id, vehicle_id, pickup_area_id, status, created_at, accepted_at, arrived_at, started_at, completed_at, cancelled_at | FK vehicle/area; partial unique index on vehicle for nonterminal pools |
+| `pools` | id, vehicle_id, pickup_area_id, status, created_at, updated_at, accepted_at, arrived_at, started_at, completed_at, cancelled_at | FK vehicle/area; partial unique index on vehicle for nonterminal pools |
 | `pool_memberships` | id, pool_id, ride_request_id, joined_at, released_at | FK pool/request; unique request ID; pool index; cancellation retains membership record |
-| `fare_snapshots` | id, ride_request_id, pricing_version, seat_count, base_per_seat_poysha, zone_per_seat_poysha, discount_per_seat_poysha, total_poysha, committed_at | unique FK request; nonnegative money components |
-| `ride_events` | id, ride_request_id, actor_user_id nullable, from_state, to_state, reason, occurred_at | request and pool events distinguished by entity_type with exactly one associated ID; indexed by entity/time |
+| `fare_snapshots` | id, ride_request_id, pricing_version, seat_count, base_per_seat_poysha, zone_per_seat_poysha, discount_per_seat_poysha, total_poysha, committed_at | unique FK request; nonnegative components and total check; UPDATE/DELETE trigger rejects changes |
+| `ride_events` | id, ride_request_id nullable, pool_id nullable, entity_type, actor_user_id nullable, from_state, to_state, reason, occurred_at | exactly one request/pool target; indexed by entity/time; matching state checks |
 
 All IDs are UUIDs and dates `timestamptz`. Cross-row vehicle capacity, matching eligibility, coordinated states and fare snapshots are transaction invariants, not claimed to be simple row checks.
 
