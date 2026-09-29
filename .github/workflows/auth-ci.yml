@@ -1,13 +1,13 @@
-name: Auth checks
+name: MVP checks
 
 on:
   push:
-    branches: [feature/auth]
+    branches: [pre-release]
   pull_request:
-    branches: [master]
+    branches: [master, pre-release]
 
 jobs:
-  auth:
+  mvp:
     runs-on: ubuntu-latest
     permissions:
       contents: read
