@@ -2,7 +2,12 @@
 
 Share a seat. Split the fare. Survive Dhaka traffic.
 
-Nusrat and Rafiq can request overlapping Banani trips and share Jashim's three-passenger-seat Bullet. The system allocates compatible requests without overbooking; Jashim decides when to accept and run a trip. Each passenger sees only their own state, estimate and accepted fare. Shirin can take the third seat, or wait when Bullet is full. This is the merged Phase 1–6 MVP on a Phase 7 `pre-release` integration branch, not a public release.
+Nusrat and Rafiq can request overlapping Banani trips and share Jashim's three-passenger-seat Bullet. The system allocates compatible requests without overbooking; Jashim decides when to accept and run a trip. Each passenger sees only their own state, estimate and accepted fare. Shirin can take the third seat, or wait when Bullet is full. This is the verified `release/v1.0.0` submission state, cut from the validated `pre-release` branch after the final release checks.
+
+
+## 🎥 Final Demo Video
+
+[Watch the Dhaka Tesla Pool Final Demo Video](https://drive.google.com/file/d/138VcAjl0Etc0CaW-xbRDiLKtk6fKETS0/view?usp=drivesdk)
 
 ## What works
 
@@ -120,9 +125,9 @@ For **real PostgreSQL integration tests**, set `DATABASE_URL` and `TEST_DATABASE
 
 ## Deployment and release status
 
-No public free deployment or URL has been verified. The local Docker deployment was built and the web/API/DB services were healthy in the user's environment; its browser walkthrough is represented by the supplied screenshots above. In this Work environment there is no Docker executable, PostgreSQL server, authenticated free hosting account or public HTTPS endpoint for an independent deploy. The reproducible Compose path above is the PRD's allowed alternative. A public operator must supply persistent storage, private environment secrets, HTTPS and an exact `APP_ORIGIN`, then verify web/API/readiness and the cast-based journey; localhost is not a public URL. No video has been supplied or fabricated.
+No public free deployment or URL has been verified. The local Docker deployment was built and the web/API/DB services were healthy in the user's environment; its browser walkthrough is represented by the supplied screenshots above. In this Work environment there is no Docker executable, PostgreSQL server, authenticated free hosting account or public HTTPS endpoint for an independent deploy. The reproducible Compose path above is the PRD's allowed alternative. A public operator must supply persistent storage, private environment secrets, HTTPS and an exact `APP_ORIGIN`, then verify web/API/readiness and the cast-based journey; localhost is not a public URL.The final demo video is linked prominently near the top of this README.
 
-Limitations: zone-only routing (no GPS/distance), two bookable v1 routes, one seeded three-seat Bullet, cash due is recorded but collection is not integrated, no driver cancellation, and process-local auth throttling is suitable only for one API process. Future improvements require measured demand and explicit scope; a public free host remains unverified. The `release/v1.0.0` branch and final video of at most six minutes are reserved for Phase 8.
+Limitations: zone-only routing (no GPS/distance), two bookable v1 routes, one seeded three-seat Bullet, cash due is recorded but collection is not integrated, no driver cancellation, and process-local auth throttling is suitable only for one API process. Future improvements require measured demand and explicit scope; a public free host remains unverified. The `release/v1.0.0` branch contains the final verified submission state, and the final demo video is linked above.
 
 ## AI Usage
 

@@ -18,8 +18,8 @@ This audits the merged Phase 1–6 MVP against the mandatory PRD, not a future d
 | Docker, `.env.example`, migrations and cast seed | Implemented; locally verified | Compose web/API/PostgreSQL built and healthy in the user's local run; migration/seed-backed story journey and 31/31 API tests succeeded. Not independently rerun in this Work environment. |
 | Architecture diagram, ERD, README, choices/alternatives, AI disclosure | Implemented | README and architecture/docs; real, unmodified local screenshots supplied and linked. |
 | Free deployment | Documented alternative; public deploy pending | No verified public URL or authenticated free host in this environment. Reproducible Docker deployment documented as PRD fallback. Never treat localhost as public deployment. |
-| Git workflow | Phase 7 closeout | Feature branches merged into latest master; `pre-release` cut from that master. `release/v1.0.0` intentionally deferred to Phase 8. |
-| Final ≤6-minute video/link | Pending Phase 8 | No recording or link supplied; do not claim one. |
+| Git workflow | Completed | `release/v1.0.0` was cut from the verified `pre-release` branch after release checks. |
+| Final demo video/link | Completed | Final product walkthrough recorded and linked prominently from README. |
 | Optional viral-scale design | Not attempted | PRD marks this bonus optional. No speculative infrastructure added. |
 
 ## Six required behavior tests
