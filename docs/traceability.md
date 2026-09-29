@@ -1,6 +1,6 @@
 # RoBenDevs PRD compliance audit — Phase 7
 
-This audits the merged Phase 1–6 MVP against the mandatory PRD, not a future design. “Implemented” means source and tests exist; PostgreSQL/Compose execution is a separate verification gate. The local Phase 7 environment has no Docker or PostgreSQL executable; the pre-release CI workflow is configured to run these suites against a disposable PostgreSQL service when pushed. See README for the reproducible deployment path and the final verification report for actual command results.
+This audits the merged Phase 1–6 MVP against the mandatory PRD, not a future design. “Implemented” means source and tests exist. The user's local Docker/PostgreSQL run completed the runtime gate: Docker build succeeded, web/API/DB were healthy, PostgreSQL API tests passed 31/31, frontend tests passed 9/9, **40/40 total, 0 failed, 0 skipped**, and a browser walkthrough of Nusrat, Rafiq and Jashim was verified. Selected supplied screenshots are in `docs/screenshots/` and README. This Work environment lacks Docker/PostgreSQL, so those results are attributed to the user's local verification rather than an independent rerun here. The pre-release CI workflow will run its own disposable-PostgreSQL checks when pushed.
 
 | PRD area | Status | Implementation / evidence / outstanding gate |
 | --- | --- | --- |
@@ -13,12 +13,12 @@ This audits the merged Phase 1–6 MVP against the mandatory PRD, not a future d
 | Individual fare and cash | Implemented | `0004_driver_flow.sql` immutable per-request snapshots; v1 tariff, discount at acceptance, integer poysha; cancelled pre-start cash due zero. Cash collection is outside MVP. |
 | Simple geography and matching | Implemented | Eight named areas; Banani → Mohakhali and Banani → Gulshan 1 are the seeded compatible routes; unsupported route rejected and full/offline ride waits. |
 | API design, auth, validation, security, errors | Implemented | Express REST modules, Zod, Argon2id, hashed opaque cookie sessions, Origin and JSON mutation checks, ownership, bounded pagination and consistent errors. |
-| Frontend loading/error/empty states and API integration | Implemented | React Router passenger/driver pages, reusable feedback, UI tests. Full browser journey with real DB remains unverified in this environment. |
-| Relational schema, relationships, constraints/indexes/history | Implemented | Numbered migrations 0001–0004, UUID/FKs/checks/partial unique indexes, event history and immutable snapshot trigger. Fresh DB execution remains unverified here. |
-| Docker, `.env.example`, migrations and cast seed | Implemented; runtime gate pending | Compose web/API/PostgreSQL, health checks, migration ledger and idempotent Jashim/Nusrat/Rafiq/Shirin/Bullet seed. Docker unavailable here; follow README on a Docker host. |
-| Architecture diagram, ERD, README, choices/alternatives, AI disclosure | Implemented | README and architecture/docs; no real screenshots/GIFs supplied. |
+| Frontend loading/error/empty states and API integration | Implemented; locally verified | React Router passenger/driver pages and UI tests; user-verified full local browser journey for Nusrat, Rafiq and Jashim; supplied screenshots document representative states. |
+| Relational schema, relationships, constraints/indexes/history | Implemented; locally verified | Numbered migrations 0001–0004, UUID/FKs/checks/partial unique indexes, event history and immutable snapshot trigger; real PostgreSQL API suite passed 31/31 locally. |
+| Docker, `.env.example`, migrations and cast seed | Implemented; locally verified | Compose web/API/PostgreSQL built and healthy in the user's local run; migration/seed-backed story journey and 31/31 API tests succeeded. Not independently rerun in this Work environment. |
+| Architecture diagram, ERD, README, choices/alternatives, AI disclosure | Implemented | README and architecture/docs; real, unmodified local screenshots supplied and linked. |
 | Free deployment | Documented alternative; public deploy pending | No verified public URL or authenticated free host in this environment. Reproducible Docker deployment documented as PRD fallback. Never treat localhost as public deployment. |
-| Git workflow | Phase 7 in progress | Feature branches merged into latest master; `pre-release` cut from that master. `release/v1.0.0` intentionally deferred to Phase 8. |
+| Git workflow | Phase 7 closeout | Feature branches merged into latest master; `pre-release` cut from that master. `release/v1.0.0` intentionally deferred to Phase 8. |
 | Final ≤6-minute video/link | Pending Phase 8 | No recording or link supplied; do not claim one. |
 | Optional viral-scale design | Not attempted | PRD marks this bonus optional. No speculative infrastructure added. |
 
@@ -26,12 +26,12 @@ This audits the merged Phase 1–6 MVP against the mandatory PRD, not a future d
 
 | Required behavior | Existing automated coverage | Verification boundary |
 | --- | --- | --- |
-| Bullet never exceeds three seats | `pooling.integration.test.ts`: three-rider allocation, full waiting, last-seat contention | Requires real PostgreSQL. |
-| Invalid transitions rejected | `pooling.integration.test.ts` and `driver.integration.test.ts`: repeated/stale actions with no partial writes/events | Requires real PostgreSQL. |
-| Nusrat and Rafiq pooled fares | `driver.integration.test.ts`: accepted 11400/14600 poysha and immutable snapshots | Requires real PostgreSQL. |
-| Other users cannot modify rides | `rides.db.test.ts`, `pooling.integration.test.ts`, driver ownership cases | Requires real PostgreSQL; unit route guards also run without it. |
-| Cancellation rules | `pooling.integration.test.ts` and `driver.integration.test.ts`: seat release, waiting retry, final-member cancellation, post-start refusal | Requires real PostgreSQL. |
-| Concurrent last seat | `pooling.integration.test.ts`: two separate connections and synchronized attempts with two seats reserved; one MATCHED, one REQUESTED, events and seat total checked | Requires real PostgreSQL; never substitute a mock. |
+| Bullet never exceeds three seats | `pooling.integration.test.ts`: three-rider allocation, full waiting, last-seat contention | Included in user's 31/31 real PostgreSQL API pass. |
+| Invalid transitions rejected | `pooling.integration.test.ts` and `driver.integration.test.ts`: repeated/stale actions with no partial writes/events | Included in user's 31/31 real PostgreSQL API pass. |
+| Nusrat and Rafiq pooled fares | `driver.integration.test.ts`: accepted 11400/14600 poysha and immutable snapshots | Included in user's 31/31 real PostgreSQL API pass; local browser screenshots show BDT 114/146 histories. |
+| Other users cannot modify rides | `rides.db.test.ts`, `pooling.integration.test.ts`, driver ownership cases | Included in user's 31/31 real PostgreSQL API pass. |
+| Cancellation rules | `pooling.integration.test.ts` and `driver.integration.test.ts`: seat release, waiting retry, final-member cancellation, post-start refusal | Included in user's 31/31 real PostgreSQL API pass. |
+| Concurrent last seat | `pooling.integration.test.ts`: two separate connections and synchronized attempts with two seats reserved; one MATCHED, one REQUESTED, events and seat total checked | Included in user's 31/31 real PostgreSQL API pass; not a mocked race. |
 
 ## Cast and final scope
 
