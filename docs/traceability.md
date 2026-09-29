@@ -1,103 +1,38 @@
-# PRD traceability and release gates
+# RoBenDevs PRD compliance audit — Phase 7
 
-IDs below follow the approved requirement analysis. Phase 6 adds passenger and driver product screens over the existing backend. Deployment, final video and release work remain future work.
+This audits the merged Phase 1–6 MVP against the mandatory PRD, not a future design. “Implemented” means source and tests exist. The user's local Docker/PostgreSQL run completed the runtime gate: Docker build succeeded, web/API/DB were healthy, PostgreSQL API tests passed 31/31, frontend tests passed 9/9, **40/40 total, 0 failed, 0 skipped**, and a browser walkthrough of Nusrat, Rafiq and Jashim was verified. Selected supplied screenshots are in `docs/screenshots/` and README. This Work environment lacks Docker/PostgreSQL, so those results are attributed to the user's local verification rather than an independent rerun here. The pre-release CI workflow will run its own disposable-PostgreSQL checks when pushed.
 
-| ID | Component / deliverable | Required verification |
+| PRD area | Status | Implementation / evidence / outstanding gate |
 | --- | --- | --- |
-| PROD-01 | Passenger and driver web flows, API, DB | Complete cast-based demo |
-| PROD-02 | Auth module, passenger forms | Registration/login integration |
-| PROD-03 | Request form/module, fare estimator | Route/seat/estimate checks |
-| PROD-04 | Request state/history and UI | Status and cancellation tests |
-| PROD-05 | Driver availability/matching UI and API | Online/offline and acceptance integration |
-| PROD-06 | Trip module and driver UI | Arrival/start/complete/history integration |
-| POOL-01 | Matching, membership, locked capacity allocation | Normal three-rider case and concurrent last-seat test |
-| POOL-02 | Session checks and ownership-scoped serializers | Cross-user access/modification denial |
-| POOL-03 | Separate state machines and append-only events | Invalid transitions and history tests |
-| GEO-01 | Areas and deterministic compatibility service | Nusrat/Rafiq compatible route test |
-| GEO-02 | Zone-only model | No map dependency; scope explained |
-| FARE-01 | Tariff and fare calculator | Nusrat 11400 and Rafiq 14600 poysha test |
-| FARE-02 | Integer poysha columns and formatting | Schema, rounding and hand-check review |
-| FARE-03 | Cash selection and due policy | Completion/cancellation behavior; no gateway |
-| STACK-01 | React/TypeScript web, Node/Express API | Build and Compose check |
-| STACK-02 | PostgreSQL and choices in README | Alternatives, MVP rationale, switch criteria |
-| API-01 | HTTP boundary and domain modules | Error, validation, state, integrity and basic security tests |
-| UI-01 | Passenger and driver screens | End-to-end product tour |
-| UI-02 | Shared loading/error/empty displays | Each key screen's state check |
-| DB-01 | Migrations, constraints, indexes, transactions | Fresh migration and integrity tests |
-| DB-02 | Optional payment/rating/audit extensions omitted | README records deliberate scope |
-| OPS-01 | Compose, env example, migrations, story seed | Fresh-clone `docker compose up` check |
-| OPS-02 | API and DB health checks | Liveness/readiness and Compose status |
-| DEP-01 | Release process and README | Free URL if available, else specific Docker deployment constraint |
-| DOC-01 | `architecture.md` diagram and ERD | Compare docs with final code/schema |
-| DOC-02 | README | Audit every PRD section 12 documentation item |
-| AI-01 | README AI Usage | Tool purposes, accepted and rejected/changed suggestion |
-| GIT-01 | master, actual feature branches, pre-release, release/v1.0.0 | Check ancestry and merge flow |
-| GIT-02 | Scoped logical commits | Git log review |
-| TEST-01 | DB/API tests | All six behavior tests pass |
-| VIDEO-01 | Video and prominent README link | Duration <=6 min and specified three blocks |
-| SUB-01 | Public/evaluator-accessible release | Fresh-clone reviewer checklist |
-| SCALE-01 | Optional scaling document | 1M passengers/100k drivers topics if attempted |
-
-## Historical Phase 3 evidence and remaining scope at that phase
-
-| IDs | Implemented now | Remaining gate |
-| --- | --- | --- |
-| PROD-03, FARE-01, FARE-02 | Versioned Banani tariffs and integer-poysha request estimate; Nusrat 13000, Rafiq 17000 standalone tests | Pool-acceptance discount and accepted fare snapshots: Nusrat 11400, Rafiq 14600 |
-| PROD-04, POOL-02, POOL-03 | Owned request reads/list, `REQUESTED` cancellation and transactional request events | Later request/pool states, full cancellation policy and frontend |
-| GEO-01, GEO-02 | Eight named Dhaka areas; exactly two v1 bookable routes | Matching compatibility and multiple destinations in one pool |
-| DB-01, OPS-01 | `0002_ride_domain.sql`, idempotent Dhaka and Bullet seed, FK/check/index constraints | Pool membership/capacity transaction and full fresh Compose verification |
-| TEST-01, API-01 | Fare tests and real PostgreSQL API/integrity tests added | Run PostgreSQL integration gate and later capacity/concurrency tests |
+| Passenger signup/signin | Implemented | `auth` API, `users`/`sessions`, `/signup`, `/signin`, role guards and UI/API tests. |
+| Request pickup/destination/seats and estimated fare | Implemented | `/areas`, `route_fares`, `ride-requests`, passenger booking form, 1–3 seats, standalone v1 estimate. Only two Banani routes are bookable. |
+| Status, own history and valid cancellation | Implemented | Request state/events, owner-scoped list/detail/cancel; passenger active/history views. Cancellation allowed through DRIVER_ARRIVED, rejected after STARTED. |
+| Driver signin, online/offline, own Tesla | Implemented | Seeded Jashim/Bullet, assigned vehicle API and driver dashboard; offline blocked during nonterminal pool. |
+| Relevant Ride Requests, accept, arrival, start, complete, history | Implemented | Assigned pool list/detail/actions with member names/routes/seats/status and driver UI/history. |
+| Shared pool, membership and capacity | Implemented | `0003_pooling.sql`, unique nonterminal vehicle pool and request membership; READ COMMITTED vehicle → pool → request locks and authoritative seat recount. |
+| Individual fare and cash | Implemented | `0004_driver_flow.sql` immutable per-request snapshots; v1 tariff, discount at acceptance, integer poysha; cancelled pre-start cash due zero. Cash collection is outside MVP. |
+| Simple geography and matching | Implemented | Eight named areas; Banani → Mohakhali and Banani → Gulshan 1 are the seeded compatible routes; unsupported route rejected and full/offline ride waits. |
+| API design, auth, validation, security, errors | Implemented | Express REST modules, Zod, Argon2id, hashed opaque cookie sessions, Origin and JSON mutation checks, ownership, bounded pagination and consistent errors. |
+| Frontend loading/error/empty states and API integration | Implemented; locally verified | React Router passenger/driver pages and UI tests; user-verified full local browser journey for Nusrat, Rafiq and Jashim; supplied screenshots document representative states. |
+| Relational schema, relationships, constraints/indexes/history | Implemented; locally verified | Numbered migrations 0001–0004, UUID/FKs/checks/partial unique indexes, event history and immutable snapshot trigger; real PostgreSQL API suite passed 31/31 locally. |
+| Docker, `.env.example`, migrations and cast seed | Implemented; locally verified | Compose web/API/PostgreSQL built and healthy in the user's local run; migration/seed-backed story journey and 31/31 API tests succeeded. Not independently rerun in this Work environment. |
+| Architecture diagram, ERD, README, choices/alternatives, AI disclosure | Implemented | README and architecture/docs; real, unmodified local screenshots supplied and linked. |
+| Free deployment | Documented alternative; public deploy pending | No verified public URL or authenticated free host in this environment. Reproducible Docker deployment documented as PRD fallback. Never treat localhost as public deployment. |
+| Git workflow | Phase 7 closeout | Feature branches merged into latest master; `pre-release` cut from that master. `release/v1.0.0` intentionally deferred to Phase 8. |
+| Final ≤6-minute video/link | Pending Phase 8 | No recording or link supplied; do not claim one. |
+| Optional viral-scale design | Not attempted | PRD marks this bonus optional. No speculative infrastructure added. |
 
 ## Six required behavior tests
 
-1. Bullet's reserved seats never exceed three.
-2. Invalid request and pool transitions are rejected.
-3. Nusrat's and Rafiq's accepted pooled fares are 11400 and 14600 poysha.
-4. One user cannot modify another user's ride.
-5. Cancellation cutoffs and remaining-pool behavior hold.
-6. Two simultaneous requests for exactly one remaining seat yield one MATCHED and one REQUESTED, without overbooking or corrupt history.
-
-## Submission acceptance checklist
-
-- [ ] Working passenger registration/sign-in, estimate/booking, own status/fare, allowed cancellation and history.
-- [ ] Working Jashim login, availability, explicit Relevant Ride Requests section, acceptance, arrival, start, completion and history.
-- [ ] Nusrat/Rafiq/Shirin normal demo; separate controlled one-seat concurrency test.
-- [ ] Capacity, matching, fares, cash and two state machines conform to approved design.
-- [ ] Six behavior tests above pass; ownership and failure responses work.
-- [ ] Correct loading, error and empty UI states and a usable UI.
-- [ ] Fresh Docker build/up, migration and cast seed; health checks; no committed credentials.
-- [ ] Architecture diagram, ERD, README setup, screenshots/GIFs, API, trade-offs and AI Usage complete.
-- [ ] Required branches and logical commits show feature -> master -> pre-release -> release/v1.0.0.
-- [ ] Free public deployment URL if feasible, else documented reproducible Docker deployment.
-- [ ] Maximum six-minute video link and PRD time blocks complete.
-- [ ] Optional viral-scale reasoning clearly labelled if attempted.
-
-The six-minute video must cover 0:00-1:00 problem/users/core idea in own words, 1:00-3:00 architecture, backend, frontend, DB, lifecycle, decision and trade-off while displaying architecture and ERD, and 3:00-6:00 passenger/driver flows, pooling, own fare/status, edge case and deployment if available.
-
-Never pay for infrastructure, commit credentials, submit a giant finished-system initial commit, do all feature work on master, add technology solely for appearances, polish animation before integrity, hide AI usage, ship code you cannot explain, or replace the story cast with generic placeholders. Viral-scale reasoning may address load balancing, horizontal scaling, indexing/read replicas, caching, geospatial search, queues/events, realtime, rate limits, idempotency, observability, contention, matching, retries/failures, security and deployment **without adding those systems to the MVP**.
-
-## Historical Phase 4 evidence and remaining gates at that phase
-
-| IDs | Implemented now | Remaining gate |
+| Required behavior | Existing automated coverage | Verification boundary |
 | --- | --- | --- |
-| POOL-01, GEO-01, DB-01 | `0003_pooling.sql`, online OPEN-pool matching, unique active pool/membership, locked seat checks, three-rider and simultaneous last-seat PostgreSQL tests | Execute PostgreSQL integration tests on disposable database |
-| POOL-02, POOL-03, PROD-04 | Owned MATCHED cancellation releases membership and logs request/pool events; final OPEN member cancels pool | Driver acceptance and later pre-start cancellation in Phase 5 |
-| FARE-01 | Matched request retains standalone integer estimate | Accepted pooled fare snapshots and 11400/14600 fare tests in Phase 5 |
+| Bullet never exceeds three seats | `pooling.integration.test.ts`: three-rider allocation, full waiting, last-seat contention | Included in user's 31/31 real PostgreSQL API pass. |
+| Invalid transitions rejected | `pooling.integration.test.ts` and `driver.integration.test.ts`: repeated/stale actions with no partial writes/events | Included in user's 31/31 real PostgreSQL API pass. |
+| Nusrat and Rafiq pooled fares | `driver.integration.test.ts`: accepted 11400/14600 poysha and immutable snapshots | Included in user's 31/31 real PostgreSQL API pass; local browser screenshots show BDT 114/146 histories. |
+| Other users cannot modify rides | `rides.db.test.ts`, `pooling.integration.test.ts`, driver ownership cases | Included in user's 31/31 real PostgreSQL API pass. |
+| Cancellation rules | `pooling.integration.test.ts` and `driver.integration.test.ts`: seat release, waiting retry, final-member cancellation, post-start refusal | Included in user's 31/31 real PostgreSQL API pass. |
+| Concurrent last seat | `pooling.integration.test.ts`: two separate connections and synchronized attempts with two seats reserved; one MATCHED, one REQUESTED, events and seat total checked | Included in user's 31/31 real PostgreSQL API pass; not a mocked race. |
 
-## Phase 5 evidence and remaining gates
+## Cast and final scope
 
-| IDs | Implemented on feature branch | Remaining gate |
-| --- | --- | --- |
-| PROD-05, POOL-01 | Assigned vehicle online/offline, online waiting retry, OPEN/ACCEPTED membership freeze; acceptance and matching serialize on vehicle/pool locks | Run driver and pooling suites against disposable PostgreSQL; Phase 6 UI |
-| PROD-06, POOL-03 | Assigned pool list/detail/history, atomic accept/arrive/start/complete with synchronized request events and online completion retry | Run PostgreSQL integration gate; Phase 6 driver UI |
-| FARE-01, FARE-02, FARE-03 | `0004_driver_flow.sql` immutable per-request integer snapshot; accepted Nusrat 11400 and Rafiq 14600; cancelled-before-start cash due zero | Run snapshot, cancellation and fare checks on PostgreSQL; payment collection remains simulated cash |
-| PROD-04, POOL-02 | Owned pre-start ACCEPTED/DRIVER_ARRIVED cancellation retains snapshots, releases membership, cancels final-member pool | Passenger UI and fresh DB integration check |
-
-## Phase 6 frontend evidence and remaining gates
-
-| IDs | Implemented on feature branch | Remaining gate |
-| --- | --- | --- |
-| PROD-01, PROD-02, UI-01 | Same-origin React Router app, passenger registration and shared sign-in, session restoration and role guards | Full stack browser demo with PostgreSQL |
-| PROD-03, PROD-04, FARE-01, UI-02 | API areas, v1 booking preview, own request/status/fare/history, pre-start cancellation; shared loading/error/empty/success components | Verify cast-based user journeys on Docker |
-| PROD-05, PROD-06, POOL-02 | Bullet availability, assigned pool and Relevant Ride Requests, lifecycle controls, member fares and trip history | Full stack driver journey and concurrency gate |
-| TEST-01, STACK-01 | Frontend API-flow tests, TypeScript and responsive layout | Docker Compose build and end-to-end browser checks |
+Seed: Jashim drives Bullet (three passenger seats); Nusrat, Rafiq and Shirin are passengers. The normal Banani story and separate last-seat race are deliberately distinct. Requests and pools have separate state machines and transactionally recorded events. Phase 8 alone covers the release branch and final video; a public free URL remains conditional on a real verified free host. No map, gateway, microservice, Redis, Kafka or queue is part of the MVP.

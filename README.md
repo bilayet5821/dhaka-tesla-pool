@@ -2,63 +2,128 @@
 
 Share a seat. Split the fare. Survive Dhaka traffic.
 
-The `feature/frontend-ui` branch adds the **Phase 6 passenger and driver frontend MVP** to the merged auth, ride, pooling and driver APIs. Passengers can book and track their own rides; Jashim controls Bullet and assigned pools. Compatible Banani rides share up to three seats; a full or busy vehicle leaves requests waiting.
+Nusrat and Rafiq can request overlapping Banani trips and share Jashim's three-passenger-seat Bullet. The system allocates compatible requests without overbooking; Jashim decides when to accept and run a trip. Each passenger sees only their own state, estimate and accepted fare. Shirin can take the third seat, or wait when Bullet is full. This is the merged Phase 1–6 MVP on a Phase 7 `pre-release` integration branch, not a public release.
 
-## Design source and architecture
+## What works
 
-The RoBenDevs PRD governs the deliverable. Approved decisions, cast, compatibility rule, hand-computable fares and security contract are in [assumptions](docs/assumptions.md), [architecture/ERD](docs/architecture.md), [API contract](docs/api.md) and [PRD traceability](docs/traceability.md). Browser → React web → Node API → PostgreSQL; one modular monolith. The normal story uses Nusrat, Rafiq, Shirin, Jashim and Bullet. The separate last-seat concurrency test is covered by a PostgreSQL integration test.
+- Passenger signup, signin, session restoration, supported-area booking with 1–3 seats, indicative estimate, own live status, permitted cancellation and history.
+- Driver signin, Bullet availability, assigned pool and **Relevant Ride Requests**, acceptance, arrival, start, completion and history.
+- Deterministic same-pickup matching: the seeded Banani → Mohakhali and Banani → Gulshan 1 requests can share an `OPEN` pool. An online idle Bullet starts one; incompatible, full or unavailable cases stay `REQUESTED`/waiting. Online, seat release and completion synchronously retry waiting requests.
+- Individual integer-poysha fares, 20% zone-charge discount when at least two distinct requests are active at acceptance, immutable accepted snapshots, cash only. A cancelled pre-start request owes zero cash.
+- Server-owned state transitions, scoped reads and writes, persistent events, and PostgreSQL `READ COMMITTED` transactions. Vehicle → pool → request row locks and a fresh seat count enforce Bullet's three-seat limit under concurrent allocation.
 
-## Stack and decisions
+The web UI has loading, error and empty states and role-protected routes. It polls active state while visible. No client action can set a ride or pool status directly. There are no real maps, distance estimates, payment gateway or live tracking.
 
-React + Vite avoids unnecessary server rendering for authenticated screens (alternative: Next.js when SSR is needed). Express keeps a small API understandable (alternative: Fastify for measured performance or NestJS for a much larger team). PostgreSQL supports seat-allocation row locks, transactions and partial unique indexes (alternative: SQLite only for a single-process demo). Parameterized `pg` queries and SQL migrations expose integrity rules (alternative: ORM when the schema grows). CSS stays small (alternative: component library for more screens). Vitest tests business risk (alternative: another runner if toolchain changes). Revisit these choices only for measured needs or deployment constraints.
+## Verified local screenshots
 
-## Project structure
+These are unmodified screenshots supplied from the local Docker/browser walkthrough on 28–29 September 2026. They show real UI states, not a public deployment. The README includes a selection without browser tabs that expose unrelated personal information.
 
-- `apps/web`: React Router frontend with session context, API client, passenger and driver pages, shared feedback components and UI tests.
-- `apps/api`: Express API, auth, ride, matching and driver modules, SQL migrations, seed and tests.
-- `infra`: container images and web proxy configuration.
-- `docs`: approved product decisions, architecture, ERD and planned API.
+| Passenger fare history | Driver trip states |
+| --- | --- |
+| ![Nusrat's completed Banani to Mohakhali ride with BDT 114 accepted fare](docs/screenshots/nusrat-history.png) | ![Jashim's assigned pool after arrival, with Nusrat and Rafiq and the Start trip action](docs/screenshots/driver-arrived.png) |
+| ![Rafiq's completed Banani to Gulshan 1 ride with BDT 146 accepted fare](docs/screenshots/rafiq-history.png) | ![Jashim's empty current pool after completing the trip](docs/screenshots/driver-completed.png) |
 
-## Prerequisites and setup
+## Architecture and data
 
-Node.js 24, npm, and (for the database) Docker Engine with Compose. Copy `.env.example` to `.env`, set a private PostgreSQL password and set `AUTH_DEMO_PASSWORD` to a private, strong password of 12–128 characters. Keep both in the ignored `.env`; **never commit secrets**. The DB and API ports bind to local loopback only. `APP_ORIGIN` defaults to `http://localhost:3000` for Compose; if the web port changes, adjust it. For local Vite development, `http://localhost:5173` is also allowed outside production. Production must use HTTPS and set `APP_ORIGIN` to its exact HTTPS web origin.
+```mermaid
+flowchart LR
+  Browser --> Web[React / Vite web]
+  Web --> API[Express / TypeScript API]
+  API --> DB[(PostgreSQL)]
+```
+
+One modular monolith owns authentication, ride requests, matching, driver actions and fares. The Nginx web container proxies `/api` to the API, keeping the HttpOnly session cookie on the same origin. State changes and corresponding history events commit in one database transaction.
+
+```mermaid
+erDiagram
+  USERS ||--o{ SESSIONS : has
+  USERS ||--o{ VEHICLES : drives
+  USERS ||--o{ RIDE_REQUESTS : books
+  AREAS ||--o{ RIDE_REQUESTS : locates
+  AREAS ||--o{ ROUTE_FARES : prices
+  VEHICLES ||--o{ POOLS : serves
+  POOLS ||--o{ POOL_MEMBERSHIPS : contains
+  RIDE_REQUESTS ||--o| POOL_MEMBERSHIPS : joins
+  RIDE_REQUESTS ||--o| FARE_SNAPSHOTS : commits
+  RIDE_REQUESTS ||--o{ RIDE_EVENTS : records
+  POOLS ||--o{ RIDE_EVENTS : records
+```
+
+`0001_auth.sql` creates users/sessions; `0002_ride_domain.sql` creates areas, versioned tariffs, vehicles, requests and events; `0003_pooling.sql` creates pools/memberships and pool events; `0004_driver_flow.sql` creates immutable accepted fare snapshots. UUID keys, foreign keys, checks, a unique active request per passenger, one nonterminal pool per vehicle, and one membership per request guard the schema. Capacity is a cross-row transaction invariant. See [architecture and schema](docs/architecture.md), [approved assumptions](docs/assumptions.md), [API](docs/api.md), [auth design](docs/auth.md) and [PRD audit](docs/traceability.md).
+
+## Stack and choices
+
+| Choice | Why for this MVP | Realistic alternative and switch criterion |
+| --- | --- | --- |
+| React, TypeScript, Vite, React Router | Small authenticated passenger/driver app with client-side routing | Next.js if server rendering or public search pages become necessary |
+| Node.js 24, Express, REST, Zod | Direct HTTP contracts and domain modules without extra framework layers | Fastify for measured throughput needs; NestJS for a substantially larger API team; GraphQL for demonstrated cross-client query needs |
+| PostgreSQL 17, raw parameterized `pg`, numbered SQL migrations | Row locks, transactions and partial unique indexes make seat allocation inspectable | An ORM if schema/query maintenance outweighs SQL clarity; a different relational DB only with equivalent locking/integrity guarantees |
+| Argon2id, DB-backed opaque HttpOnly sessions | Password hashing, server-side revocation and no browser token storage | External identity provider if managed identity or federated login becomes required |
+| Plain CSS | Few screens and no design-system dependency | Component library when screens and shared controls grow |
+| Vitest, Supertest, Testing Library, PostgreSQL integration tests | Exercise API boundaries, browser flows and real last-seat races | Browser end-to-end runner if deployment regression coverage becomes necessary |
+| Docker Compose with Nginx web proxy | Reproducible three-service local deployment, single web origin | A verified free static web plus free API/Postgres host if an available plan supports persistent DB, HTTPS, secrets and cold-start limits |
+
+## Project layout and prerequisites
+
+- `apps/web`: React pages, session context, shared components, API client and frontend tests.
+- `apps/api/src/modules`: auth, rides, matching and driver domains; `apps/api/migrations`: versioned SQL; `apps/api/tests`: API and PostgreSQL tests.
+- `infra/api`, `infra/web`, `compose.yaml`: API/web images, Nginx proxy and PostgreSQL service.
+- `docs`: rules, state machines, contract, requirement audit and supplied local screenshots.
+
+Use Node.js 24 and npm; Docker Engine with Compose is required for the documented container path. Copy [.env.example](.env.example) to an ignored `.env`, set a private `POSTGRES_PASSWORD` and a strong private `AUTH_DEMO_PASSWORD` (12–128 characters). Never commit either value. `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PORT`, `API_PORT`, `WEB_PORT`, `NODE_ENV`, `APP_ORIGIN` are also documented there. For local Compose, `APP_ORIGIN` must match the web URL exactly; for a public HTTPS deployment set `NODE_ENV=production`, use HTTPS and set `APP_ORIGIN` to the exact HTTPS origin. A public reverse proxy/TLS and network policy must be configured by the operator; this repository does not provision them.
+
+## Start, migrate and seed
 
 ```sh
 cp .env.example .env
+# Edit .env with private local passwords.
 npm ci
 docker compose up --build
 ```
 
-The Compose API applies SQL migrations, idempotently seeds Jashim, Nusrat, Rafiq, Shirin, Bullet (three passenger seats), eight named areas and the two approved Banani tariffs, then starts the server. The migration runner records SHA-256 hashes of numbered SQL files. Migrations `0001`–`0003` add auth, rides and pooling; `0004` adds immutable accepted fare snapshots. `docker compose up` on later runs uses built images; `--build` rebuilds after code changes. On a host with PostgreSQL outside Compose, export `DATABASE_URL` and `AUTH_DEMO_PASSWORD`, then run `npm run migrate`, `npm run seed`, `npm run dev:api`, and `npm run dev:web` as needed. Vite proxies `/api` to localhost:3001 during local development.
+Compose waits for a healthy DB, then API startup runs all numbered migrations and the idempotent seed before serving; web waits for API readiness. Repeat `docker compose up` to reuse images, or `--build` after source changes. Visit `http://localhost:3000`; liveness `http://localhost:3001/api/v1/health/live`; readiness `http://localhost:3001/api/v1/health/ready`. DB and API bind to loopback; the web port is host-accessible. Check `docker compose ps` and `docker compose logs api` if startup fails. To stop without deleting DB data: `docker compose down`. A fresh disposable database is required for clean migration verification; deleting its volume also deletes all data, so only do that for a disposable instance.
 
-## Run checks
+With a separately running PostgreSQL server, set `DATABASE_URL` and `AUTH_DEMO_PASSWORD`, then run:
 
 ```sh
+npm ci
+npm run migrate
+npm run seed
+npm run dev:api
+# In another terminal:
+npm run dev:web
+```
+
+Vite serves `http://localhost:5173` and proxies `/api` to localhost:3001. Local development permits that origin; production requires exact HTTPS `APP_ORIGIN`. The migration ledger hashes SQL files; seed re-runs preserve existing accounts and fare rules. Seeding does not reset an existing account's password.
+
+**Demo accounts:** `jashim@demo.dhakatesla.local` (DRIVER); `nusrat@demo.dhakatesla.local`, `rafiq@demo.dhakatesla.local`, `shirin@demo.dhakatesla.local` (PASSENGER). Each uses the private password chosen in `AUTH_DEMO_PASSWORD`. Bullet starts offline with three passenger seats. These emails are identifiers, not usable credentials without your private local password.
+
+## Frontend and API
+
+Routes: `/signin`, `/signup` (passenger only), `/passenger`, `/passenger/history`, `/driver`, `/driver/history`. A cookie session is restored through `GET /api/v1/auth/me`; protected routes redirect by role. Only Banani → Mohakhali and Banani → Gulshan 1 have v1 tariffs. The pre-booking preview is indicative; the server's booking estimate and accepted snapshot are authoritative.
+
+All API paths start `/api/v1`. `POST /auth/register|login|logout`, `GET /auth/me`, `GET /areas`, `POST /ride-requests`, `GET /ride-requests?scope=active|history`, `GET /ride-requests/:id`, `POST /ride-requests/:id/cancel`, `GET /driver/vehicle`, `PATCH /driver/vehicle/availability`, `GET /driver/pools?scope=open|active|history`, `GET /driver/pools/:id`, and `POST /driver/pools/:id/accept|arrive|start|complete` are implemented. Health endpoints are `/health/live` and `/health/ready`. Passenger reads are owner-scoped; driver reads are assigned-vehicle-scoped. Mutations require an allowed `Origin`, JSON and proper session/role. There is no `/fares/estimate` endpoint: booking returns the estimate. See [request/response contract](docs/api.md).
+
+## Tests and concurrency
+
+```sh
+npm ci
 npm run build
-npm run lint
+npm run lint                 # includes both workspace TypeScript checks
+npm run typecheck --workspaces
 npm test
 ```
 
-PostgreSQL integration tests run only when `TEST_DATABASE_URL` equals `DATABASE_URL` and points to an explicitly disposable PostgreSQL database. For example, after starting a disposable PostgreSQL instance, export both variables to the same URL and run `npm test`. Without those variables the database suites report skipped; a successful local unit test run alone does **not** verify database behavior. The GitHub Actions pull-request gate provides a disposable PostgreSQL service.
+For **real PostgreSQL integration tests**, set `DATABASE_URL` and `TEST_DATABASE_URL` to the **same explicitly disposable PostgreSQL database** before `npm test`. DB-mutating suites run sequentially against that shared URL. Without both variables the DB suites skip, even if unit/UI tests pass. CI has a disposable PostgreSQL service for pull requests to master or pre-release and pushes to pre-release. The integration suites cover three-seat allocation, compatible Nusrat/Rafiq routes, waiting/full behavior, ownership, invalid transitions, accepted fare snapshots, cancellation, and two independent DB connections racing for the last seat. The latter must produce one MATCHED, one REQUESTED and exactly three seats; vehicle → pool → request locks and a re-read after locks prevent stale seat counts. A larger deployment would first measure contention and DB capacity before considering another matching architecture.
 
-After Compose is healthy, web: `http://localhost:3000`, API liveness: `http://localhost:3001/api/v1/health/live`, API readiness: `http://localhost:3001/api/v1/health/ready`. Liveness does not access DB; readiness requires DB and migration ledger.
+**Completed local verification (user-provided evidence):** Docker build succeeded; Compose web/API/DB were healthy; the real PostgreSQL API run passed 31/31 tests and the frontend run passed 9/9, for **40/40 passed, 0 failed, 0 skipped**. A full local browser walkthrough for Nusrat, Rafiq and Jashim was also verified; selected screenshots above show the passenger fare histories and driver states. These results came from the user's Docker/PostgreSQL environment. This Work environment cannot independently rerun Docker or PostgreSQL because those executables are absent here; its earlier non-DB run passed 23 tests and skipped 17 DB tests.
 
-**Demo logins:** `jashim@demo.dhakatesla.local` (DRIVER), `nusrat@demo.dhakatesla.local`, `rafiq@demo.dhakatesla.local`, and `shirin@demo.dhakatesla.local` (PASSENGER). All use the **private password you set in `AUTH_DEMO_PASSWORD`**. Seeding does not reset an existing account's password: if you change that variable later, use a fresh local database or change credentials through a future account-management flow. Do not use a real personal password for the shared demo accounts.
+## Deployment and release status
 
-Auth endpoints are `POST /api/v1/auth/register`, `POST /login`, `POST /logout`, and `GET /me`. POST requests require `Content-Type: application/json` and an exact allowed `Origin`, including direct API calls. For example, to register, send JSON `{ "name": "Example", "email": "example@example.com", "password": "a-unique-strong-passphrase" }` with `Origin: http://localhost:3000`; the response sets an HttpOnly cookie. Refer to [auth design and security](docs/auth.md) for the contract. No public driver signup exists.
+No public free deployment or URL has been verified. The local Docker deployment was built and the web/API/DB services were healthy in the user's environment; its browser walkthrough is represented by the supplied screenshots above. In this Work environment there is no Docker executable, PostgreSQL server, authenticated free hosting account or public HTTPS endpoint for an independent deploy. The reproducible Compose path above is the PRD's allowed alternative. A public operator must supply persistent storage, private environment secrets, HTTPS and an exact `APP_ORIGIN`, then verify web/API/readiness and the cast-based journey; localhost is not a public URL. No video has been supplied or fabricated.
 
-`GET /api/v1/areas` lists named areas. Passenger-only `POST /api/v1/ride-requests` accepts `{ "pickupAreaId": "uuid", "destinationAreaId": "uuid", "seats": 1 }` and returns an integer-poysha estimate with `REQUESTED` or `MATCHED` status. Owned list/detail and cancellation remain under `/api/v1/ride-requests`; detail includes events and the committed fare breakdown when accepted. Standalone one-seat estimates are Nusrat **13000** and Rafiq **17000** poysha. Driver acceptance freezes fares at **11400** and **14600** poysha respectively when pooled. Bullet seeds offline. Jashim can use `PATCH /api/v1/driver/vehicle/availability` with `{ "isOnline": true }`, list/detail assigned pools, then accept, arrive, start and complete the pool; see [API contract](docs/api.md). All mutations require a session, allowed Origin and JSON body.
+Limitations: zone-only routing (no GPS/distance), two bookable v1 routes, one seeded three-seat Bullet, cash due is recorded but collection is not integrated, no driver cancellation, and process-local auth throttling is suitable only for one API process. Future improvements require measured demand and explicit scope; a public free host remains unverified. The `release/v1.0.0` branch and final video of at most six minutes are reserved for Phase 8.
 
-**Frontend routes:** `/signin` handles passenger and driver login; `/signup` creates passenger accounts only. `/passenger` shows supported API areas, a standalone v1 estimate, booking, current status, accepted fare breakdown and permitted cancellation; `/passenger/history` shows only owned past rides and their events. `/driver` shows Bullet availability, the assigned pool, **Relevant Ride Requests** and the next valid trip action; `/driver/history` shows assigned completed/cancelled pools. Protected routes restore the cookie session with `GET /auth/me` and redirect across roles. The client stores no session token. Mutations go through the existing API; the client does not set ride or pool states itself. Status pages refresh on demand and poll while visible.
+## AI Usage
 
-The booking form labels its pre-booking amount as an indicative standalone v1 tariff for Banani → Mohakhali/Gulshan 1. The server's returned estimate replaces that preview after submission. The separate `/fares/estimate` endpoint is not implemented; the frontend does not call it. Other areas returned by `GET /areas` are shown as future, unavailable routes.
-
-Availability changes, acceptance and trip actions use READ COMMITTED transactions, one connection each, and vehicle → pool → sorted request row locks. Going online and completing an online trip retry waiting rides after commit. An active OPEN pool also blocks going offline. Acceptance freezes members and saves each rider's integer-poysha fare; later pre-start cancellation releases seats without changing saved fares. A canceled rider owes zero cash. Driver actions reject repeats and wrong states with 409; passengers cannot cancel after start.
-
-## Deployment, limitations and next work
-
-No public deployment URL or six-minute video exists in Phase 6. Only free hosting will be considered. Docker provides a reproducible route when a suitable free backend/database service is unavailable. Next: full stack PostgreSQL/browser integration on Docker, final documentation and media, then the approved pre-release/release workflow. The auth throttle is process-local and would need shared coordination if the API gained replicas. The final README must include screenshots/GIFs, the video link, expanded API overview, verified limitations, AI Usage examples and optional viral-scale discussion before submission.
-
-## AI Usage (work in progress)
-
-ChatGPT/Codex was used to analyze the PRD, propose/document design decisions, scaffold the foundation, implement authentication, ride requests, locked pooling, Phase 5 driver flow and Phase 6 frontend. One accepted suggestion: separate system matching from Jashim's pool acceptance, and keep request state separate from pool state. One changed suggestion: an earlier analysis conflated `MATCHED/ACCEPTED`; the design was corrected because matching and driver acceptance have different actors. All generated changes require testing and explanation before shipping.
+ChatGPT/Codex assisted PRD analysis, design review, implementation, documentation and test authoring; official package documentation and local tooling were used to check API/runtime behavior. An accepted suggestion was to separate system `REQUESTED → MATCHED` allocation from Jashim's later acceptance and keep request/pool state machines distinct, which makes pricing and authority explicit. An earlier suggestion blurred `MATCHED` with `ACCEPTED`; it was changed because the driver alone accepts and final fares must be committed at that point. The repository owner remains responsible for understanding and validating the code, including the PostgreSQL concurrency behavior.
