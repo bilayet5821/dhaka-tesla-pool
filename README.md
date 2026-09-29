@@ -14,7 +14,14 @@ Nusrat and Rafiq can request overlapping Banani trips and share Jashim's three-p
 
 The web UI has loading, error and empty states and role-protected routes. It polls active state while visible. No client action can set a ride or pool status directly. There are no real maps, distance estimates, payment gateway or live tracking.
 
-**Screenshots/GIFs:** none supplied or captured for this branch. No image is presented as a verified product screenshot.
+## Verified local screenshots
+
+These are unmodified screenshots supplied from the local Docker/browser walkthrough on 28–29 September 2026. They show real UI states, not a public deployment. The README includes a selection without browser tabs that expose unrelated personal information.
+
+| Passenger fare history | Driver trip states |
+| --- | --- |
+| ![Nusrat's completed Banani to Mohakhali ride with BDT 114 accepted fare](docs/screenshots/nusrat-history.png) | ![Jashim's assigned pool after arrival, with Nusrat and Rafiq and the Start trip action](docs/screenshots/driver-arrived.png) |
+| ![Rafiq's completed Banani to Gulshan 1 ride with BDT 146 accepted fare](docs/screenshots/rafiq-history.png) | ![Jashim's empty current pool after completing the trip](docs/screenshots/driver-completed.png) |
 
 ## Architecture and data
 
@@ -61,7 +68,7 @@ erDiagram
 - `apps/web`: React pages, session context, shared components, API client and frontend tests.
 - `apps/api/src/modules`: auth, rides, matching and driver domains; `apps/api/migrations`: versioned SQL; `apps/api/tests`: API and PostgreSQL tests.
 - `infra/api`, `infra/web`, `compose.yaml`: API/web images, Nginx proxy and PostgreSQL service.
-- `docs`: rules, state machines, contract and requirement audit.
+- `docs`: rules, state machines, contract, requirement audit and supplied local screenshots.
 
 Use Node.js 24 and npm; Docker Engine with Compose is required for the documented container path. Copy [.env.example](.env.example) to an ignored `.env`, set a private `POSTGRES_PASSWORD` and a strong private `AUTH_DEMO_PASSWORD` (12–128 characters). Never commit either value. `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PORT`, `API_PORT`, `WEB_PORT`, `NODE_ENV`, `APP_ORIGIN` are also documented there. For local Compose, `APP_ORIGIN` must match the web URL exactly; for a public HTTPS deployment set `NODE_ENV=production`, use HTTPS and set `APP_ORIGIN` to the exact HTTPS origin. A public reverse proxy/TLS and network policy must be configured by the operator; this repository does not provision them.
 
@@ -109,11 +116,13 @@ npm test
 
 For **real PostgreSQL integration tests**, set `DATABASE_URL` and `TEST_DATABASE_URL` to the **same explicitly disposable PostgreSQL database** before `npm test`. DB-mutating suites run sequentially against that shared URL. Without both variables the DB suites skip, even if unit/UI tests pass. CI has a disposable PostgreSQL service for pull requests to master or pre-release and pushes to pre-release. The integration suites cover three-seat allocation, compatible Nusrat/Rafiq routes, waiting/full behavior, ownership, invalid transitions, accepted fare snapshots, cancellation, and two independent DB connections racing for the last seat. The latter must produce one MATCHED, one REQUESTED and exactly three seats; vehicle → pool → request locks and a re-read after locks prevent stale seat counts. A larger deployment would first measure contention and DB capacity before considering another matching architecture.
 
+**Completed local verification (user-provided evidence):** Docker build succeeded; Compose web/API/DB were healthy; the real PostgreSQL API run passed 31/31 tests and the frontend run passed 9/9, for **40/40 passed, 0 failed, 0 skipped**. A full local browser walkthrough for Nusrat, Rafiq and Jashim was also verified; selected screenshots above show the passenger fare histories and driver states. These results came from the user's Docker/PostgreSQL environment. This Work environment cannot independently rerun Docker or PostgreSQL because those executables are absent here; its earlier non-DB run passed 23 tests and skipped 17 DB tests.
+
 ## Deployment and release status
 
-No public deployment URL was created or verified in this environment. There is no Docker executable or PostgreSQL server here and no authenticated free hosting account or public HTTPS endpoint available for an actual deploy. The reproducible Compose deployment above is the PRD's allowed alternative when a usable free backend/database host is unavailable. A public operator must supply persistent storage, private environment secrets, HTTPS and an exact `APP_ORIGIN`, then verify web/API/readiness and the cast-based journey; no URL is claimed here. No screenshots/GIFs or final video have been supplied or fabricated.
+No public free deployment or URL has been verified. The local Docker deployment was built and the web/API/DB services were healthy in the user's environment; its browser walkthrough is represented by the supplied screenshots above. In this Work environment there is no Docker executable, PostgreSQL server, authenticated free hosting account or public HTTPS endpoint for an independent deploy. The reproducible Compose path above is the PRD's allowed alternative. A public operator must supply persistent storage, private environment secrets, HTTPS and an exact `APP_ORIGIN`, then verify web/API/readiness and the cast-based journey; localhost is not a public URL. No video has been supplied or fabricated.
 
-Limitations: zone-only routing (no GPS/distance), two bookable v1 routes, one seeded three-seat Bullet, cash due is recorded but collection is not integrated, no driver cancellation, and process-local auth throttling is suitable only for one API process. Future improvements require measured demand and explicit scope; a public host and manual browser journey are still unverified. The `release/v1.0.0` branch and final video of at most six minutes are reserved for Phase 8.
+Limitations: zone-only routing (no GPS/distance), two bookable v1 routes, one seeded three-seat Bullet, cash due is recorded but collection is not integrated, no driver cancellation, and process-local auth throttling is suitable only for one API process. Future improvements require measured demand and explicit scope; a public free host remains unverified. The `release/v1.0.0` branch and final video of at most six minutes are reserved for Phase 8.
 
 ## AI Usage
 
