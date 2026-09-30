@@ -4,6 +4,26 @@ Share a seat. Split the fare. Survive Dhaka traffic.
 
 Nusrat and Rafiq can request overlapping Banani trips and share Jashim's three-passenger-seat Bullet. The system allocates compatible requests without overbooking; Jashim decides when to accept and run a trip. Each passenger sees only their own state, estimate and accepted fare. Shirin can take the third seat, or wait when Bullet is full. This is the verified `release/v1.0.0` submission state, cut from the validated `pre-release` branch after the final release checks.
 
+## 🌐 Live Deployment
+
+**Live Project:** https://dhaka-tesla-pool-web-hgpv.onrender.com
+
+The production deployment is hosted on Render with the React/Nginx web service, Node.js/Express API and PostgreSQL database. Passenger and driver journeys have been verified successfully on the live deployment.
+
+### Demo Credentials
+
+All seeded demo accounts use the same assessment-only demo password.
+
+| User | Role | Email |
+| --- | --- | --- |
+| Nusrat | Passenger | `nusrat@demo.dhakatesla.local` |
+| Rafiq | Passenger | `rafiq@demo.dhakatesla.local` |
+| Shirin | Passenger | `shirin@demo.dhakatesla.local` |
+| Jashim | Driver | `jashim@demo.dhakatesla.local` |
+
+**Demo password:** `DhakaTeslaDemo2026!`
+
+> These credentials are provided only for evaluating the deployed hiring-assessment application.
 
 ## 🎥 Final Demo Video
 
@@ -99,7 +119,7 @@ npm run dev:api
 npm run dev:web
 ```
 
-Vite serves `http://localhost:5173` and proxies `/api` to localhost:3001. Local development permits that origin; production requires exact HTTPS `APP_ORIGIN`. The migration ledger hashes SQL files; seed re-runs preserve existing accounts and fare rules. Seeding does not reset an existing account's password.
+Vite serves `http://localhost:5173` and proxies `/api` to localhost:3001. Local development permits that origin; production requires exact HTTPS `APP_ORIGIN`. The migration ledger hashes SQL files; seed re-runs preserve existing accounts and fare rules. Seeding refreshes the seeded demo accounts from the current AUTH_DEMO_PASSWORD while preserving the approved demo roles and ride-domain seed data.
 
 **Demo accounts:** `jashim@demo.dhakatesla.local` (DRIVER); `nusrat@demo.dhakatesla.local`, `rafiq@demo.dhakatesla.local`, `shirin@demo.dhakatesla.local` (PASSENGER). Each uses the private password chosen in `AUTH_DEMO_PASSWORD`. Bullet starts offline with three passenger seats. These emails are identifiers, not usable credentials without your private local password.
 
@@ -125,9 +145,13 @@ For **real PostgreSQL integration tests**, set `DATABASE_URL` and `TEST_DATABASE
 
 ## Deployment and release status
 
-No public free deployment or URL has been verified. The local Docker deployment was built and the web/API/DB services were healthy in the user's environment; its browser walkthrough is represented by the supplied screenshots above. In this Work environment there is no Docker executable, PostgreSQL server, authenticated free hosting account or public HTTPS endpoint for an independent deploy. The reproducible Compose path above is the PRD's allowed alternative. A public operator must supply persistent storage, private environment secrets, HTTPS and an exact `APP_ORIGIN`, then verify web/API/readiness and the cast-based journey; localhost is not a public URL.The final demo video is linked prominently near the top of this README.
+The application is publicly deployed and verified on Render.
 
-Limitations: zone-only routing (no GPS/distance), two bookable v1 routes, one seeded three-seat Bullet, cash due is recorded but collection is not integrated, no driver cancellation, and process-local auth throttling is suitable only for one API process. Future improvements require measured demand and explicit scope; a public free host remains unverified. The `release/v1.0.0` branch contains the final verified submission state, and the final demo video is linked above.
+**Live Project:** https://dhaka-tesla-pool-web-hgpv.onrender.com
+
+The production setup uses a Render-hosted Nginx/React web service that proxies `/api` to the Render Node.js/Express API service, backed by Render PostgreSQL. Production uses HTTPS, secure HttpOnly sessions and an exact `APP_ORIGIN`. API liveness and readiness were verified, and the live passenger/driver workflow was successfully exercised through booking, pooling, driver acceptance, arrival, start and completion. Render's free services may spin down during inactivity, so the first request after an idle period can take longer.
+
+Limitations: zone-only routing (no GPS/distance), two bookable v1 routes, one seeded three-seat Bullet, cash due is recorded but collection is not integrated, no driver cancellation, and process-local auth throttling is suitable only for one API process. Future improvements require measured demand and explicit scope; the free Render deployment may experience cold-start delays after inactivity. The `release/v1.0.0` branch contains the final verified submission state, and the final demo video is linked above.
 
 ## AI Usage
 
