@@ -87,7 +87,11 @@ export async function seedDemoAccounts(password: string): Promise<void> {
       const result = await client.query<{ role: string }>(
         `INSERT INTO users (id, name, normalized_email, password_hash, role)
          VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (normalized_email) DO NOTHING
+         ON CONFLICT (normalized_email)
+         DO UPDATE SET
+           name = EXCLUDED.name,
+           password_hash = EXCLUDED.password_hash,
+           role = EXCLUDED.role
          RETURNING role`,
         [randomUUID(), account.name, account.email, passwordHash, account.role],
       );
